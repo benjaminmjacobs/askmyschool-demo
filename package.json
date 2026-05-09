@@ -1,0 +1,8 @@
+{
+  "scripts": {
+    "start": "vercel dev"
+  },
+  "dependencies": {
+    "google-auth-library": "^9.15.1"
+  }
+}
