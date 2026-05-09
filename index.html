@@ -1,72 +1,65 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AskMySchool Demo</title>
-
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    body {
-      margin: 0;
-      font-family: Arial, sans-serif;
-      background: #f4f1ea;
-      color: #1f3527;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-      text-align: center;
-    }
-
-    .container {
-      max-width: 700px;
-      padding: 40px;
-    }
-
-    h1 {
-      font-size: 3rem;
-      margin-bottom: 10px;
-    }
-
-    p {
-      font-size: 1.2rem;
-      line-height: 1.6;
-      color: #4c5c52;
-    }
-
-    .button {
-      display: inline-block;
-      margin-top: 30px;
-      padding: 14px 28px;
-      background: #2f5d46;
-      color: white;
-      text-decoration: none;
-      border-radius: 10px;
-      font-weight: bold;
-    }
-
-    .button:hover {
-      background: #244735;
-    }
+    body { font-family: Arial, sans-serif; background:#f4f1ea; color:#1f3527; margin:0; padding:24px; }
+    .wrap { max-width:800px; margin:0 auto; }
+    .chat { background:white; border-radius:16px; padding:20px; box-shadow:0 8px 30px rgba(0,0,0,.08); }
+    #messages { min-height:360px; border:1px solid #ddd; padding:16px; border-radius:12px; background:#fafafa; overflow:auto; }
+    .msg { margin:10px 0; line-height:1.5; }
+    .user { font-weight:bold; color:#2f5d46; }
+    .bot { color:#333; }
+    textarea { width:100%; height:80px; margin-top:14px; padding:12px; border-radius:10px; border:1px solid #ccc; font-size:16px; }
+    button { margin-top:10px; padding:12px 20px; background:#2f5d46; color:white; border:0; border-radius:10px; font-weight:bold; cursor:pointer; }
   </style>
 </head>
-
 <body>
-  <div class="container">
-    <h1>AskMySchool</h1>
+  <div class="wrap">
+    <h1>AskMySchool Demo</h1>
+    <p>Stress test demo for school information questions.</p>
 
-    <p>
-      AI-powered school information assistant for parents,
-      students, staff, and communities.
-    </p>
+    <div class="chat">
+      <div id="messages">
+        <div class="msg bot">Ask a school question to begin.</div>
+      </div>
 
-    <p>
-      Demo environment currently in stress testing.
-    </p>
-
-    <a class="button" href="#">
-      Live Demo Coming Soon
-    </a>
+      <textarea id="input" placeholder="Example: What's for lunch at the primary school?"></textarea>
+      <button onclick="sendMessage()">Send</button>
+    </div>
   </div>
+
+  <script>
+    async function sendMessage() {
+      const input = document.getElementById("input");
+      const messages = document.getElementById("messages");
+      const text = input.value.trim();
+      if (!text) return;
+
+      messages.innerHTML += `<div class="msg user">You: ${text}</div>`;
+      input.value = "";
+      messages.innerHTML += `<div class="msg bot">AskMySchool is thinking...</div>`;
+
+      try {
+        const res = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: text })
+        });
+
+        const data = await res.json();
+        const answer =
+          data.output?.text ||
+          data.response?.text ||
+          data.text ||
+          JSON.stringify(data, null, 2);
+
+        messages.innerHTML += `<div class="msg bot"><strong>AskMySchool:</strong> ${answer}</div>`;
+      } catch (e) {
+        messages.innerHTML += `<div class="msg bot">Error: ${e.message}</div>`;
+      }
+    }
+  </script>
 </body>
 </html>
