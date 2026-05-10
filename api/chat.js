@@ -35,9 +35,9 @@ async function createSession(token, userId) {
     },
     body: JSON.stringify({
       user_id: userId,
-      state: {
+      state: JSON.stringify({
         current_date: getCurrentDateForAgent(),
-      },
+      }),
     }),
   });
 
