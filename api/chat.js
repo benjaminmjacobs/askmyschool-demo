@@ -48,16 +48,23 @@ async function createSession(token, userId) {
   }
 
   const data = await response.json();
-  const sessionId = data.name.split("/").pop();
 
-  // Wait for session to be ready before returning
-  await sleep(1500);
+  // Log the full response so we can see exactly what comes back
+  console.log("Session created, full response:", JSON.stringify(data));
+
+  const sessionId = data.name.split("/").pop();
+  console.log("Parsed session ID:", sessionId);
+
+  await sleep(2000);
 
   return sessionId;
 }
 
-async function sendMessage(token, userId, sessionId, message, retries = 2) {
+async function sendMessage(token, userId, sessionId, message) {
   const messageWithDate = `[current_date: ${getCurrentDateForAgent()}] ${message}`;
+
+  console.log("Sending message with session ID:", sessionId);
+  console.log("Stream URL:", `${BASE_URL}:streamQuery`);
 
   const response = await fetch(`${BASE_URL}:streamQuery`, {
     method: "POST",
@@ -80,16 +87,7 @@ async function sendMessage(token, userId, sessionId, message, retries = 2) {
   }
 
   const data = await response.json();
-
-  // If session not found and we have retries left, wait and try again
-  if (data.code === 498 || (data.message && data.message.includes("Session not found"))) {
-    if (retries > 0) {
-      console.log(`Session not ready, retrying in 2s... (${retries} retries left)`);
-      await sleep(2000);
-      return sendMessage(token, userId, sessionId, message, retries - 1);
-    }
-    throw new Error(`Session not found after retries: ${sessionId}`);
-  }
+  console.log("streamQuery response:", JSON.stringify(data));
 
   return data;
 }
