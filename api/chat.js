@@ -27,7 +27,7 @@ module.exports = async function handler(req, res) {
     const client = await auth.getClient();
 
     const endpoint =
-      "https://us-west1-aiplatform.googleapis.com/v1/projects/pinevera-askmyschool/locations/us-west1/reasoningEngines/5673699901649715200:query";
+      "https://us-west1-aiplatform.googleapis.com/v1/projects/346318948573/locations/us-west1/reasoningEngines/3007568922246381568:query";
 
     const response = await client.request({
       url: endpoint,
