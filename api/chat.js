@@ -3,9 +3,7 @@ const { GoogleAuth } = require("google-auth-library");
 const PROJECT_ID = "346318948573";
 const LOCATION = "us-west1";
 const REASONING_ENGINE_ID = "6128000514060713984";
-
-const BASE_URL =
-  `https://${LOCATION}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/${LOCATION}/reasoningEngines/${REASONING_ENGINE_ID}`;
+const BASE_URL = `https://${LOCATION}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/${LOCATION}/reasoningEngines/${REASONING_ENGINE_ID}`;
 
 function getCurrentDateForAgent() {
   const formatter = new Intl.DateTimeFormat("en-CA", {
@@ -14,68 +12,72 @@ function getCurrentDateForAgent() {
     month: "2-digit",
     day: "2-digit",
   });
-
   return `${formatter.format(new Date())}[America/New_York]`;
 }
 
-async function getAuthClient() {
+async function getAccessToken() {
   const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
-
   const auth = new GoogleAuth({
     credentials,
     scopes: ["https://www.googleapis.com/auth/cloud-platform"],
   });
-
-  return auth.getClient();
+  const client = await auth.getClient();
+  const tokenResponse = await client.getAccessToken();
+  return tokenResponse.token;
 }
 
-async function createSession(client, userId) {
-  const response = await client.request({
-    url: `${BASE_URL}:query`,
+async function createSession(token, userId) {
+  const response = await fetch(`${BASE_URL}/sessions`, {
     method: "POST",
-    data: {
-      classMethod: "create_session",
-      input: {
-        user_id: userId,
-        state: {
-          current_date: getCurrentDateForAgent(),
-        },
-      },
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
     },
+    body: JSON.stringify({
+      user_id: userId,
+      state: {
+        current_date: getCurrentDateForAgent(),
+      },
+    }),
   });
 
-  const name = response.data?.output?.name || response.data?.name;
-
-  if (!name) {
-    throw new Error(
-      `Could not create session. Response: ${JSON.stringify(response.data)}`
-    );
+  if (!response.ok) {
+    const err = await response.json();
+    throw new Error(JSON.stringify(err));
   }
 
-  return name.split("/").pop();
+  const data = await response.json();
+  const sessionId = data.name.split("/").pop();
+  return sessionId;
 }
 
-async function sendMessage(client, userId, sessionId, message) {
-  const response = await client.request({
-    url: `${BASE_URL}:streamQuery`,
+async function sendMessage(token, userId, sessionId, message) {
+  const response = await fetch(`${BASE_URL}:streamQuery`, {
     method: "POST",
-    data: {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
       input: {
         user_id: userId,
         session_id: sessionId,
-        message,
+        message: message,
       },
-    },
+    }),
   });
 
-  return response.data;
+  if (!response.ok) {
+    const err = await response.json();
+    throw new Error(JSON.stringify(err));
+  }
+
+  return response.json();
 }
 
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
-    return res.status(405).json({
-      error: "Method not allowed",
-    });
+    return res.status(405).json({ error: "Method not allowed" });
   }
 
   try {
@@ -89,34 +91,31 @@ module.exports = async function handler(req, res) {
     }
 
     const resolvedUserId = userId || "demo-user";
-    const client = await getAuthClient();
+    const token = await getAccessToken();
 
     let resolvedSessionId = sessionId;
-
     if (!resolvedSessionId) {
-      resolvedSessionId = await createSession(client, resolvedUserId);
+      resolvedSessionId = await createSession(token, resolvedUserId);
     }
 
     const data = await sendMessage(
-      client,
+      token,
       resolvedUserId,
       resolvedSessionId,
       message
     );
 
     return res.status(200).json({
+      response: data,
       sessionId: resolvedSessionId,
-      data,
+      userId: resolvedUserId,
     });
+
   } catch (error) {
     console.error("AskMySchool API error:", error);
-
     return res.status(500).json({
       error: "Chat request failed",
-      details:
-        error.response?.data ||
-        error.message ||
-        "Unknown server error",
+      details: error.message || "Unknown server error",
     });
   }
 };
