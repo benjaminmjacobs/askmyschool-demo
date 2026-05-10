@@ -48,11 +48,11 @@ async function createSession(token, userId) {
   }
 
   const data = await response.json();
-
-  // Log the full response so we can see exactly what comes back
   console.log("Session created, full response:", JSON.stringify(data));
 
-  const sessionId = data.name.split("/").pop();
+  // Pull session ID from nested response.name, not the top level name
+  // Top level name is the operation, response.name is the actual session
+  const sessionId = data.response.name.split("/").pop();
   console.log("Parsed session ID:", sessionId);
 
   await sleep(2000);
@@ -64,7 +64,6 @@ async function sendMessage(token, userId, sessionId, message) {
   const messageWithDate = `[current_date: ${getCurrentDateForAgent()}] ${message}`;
 
   console.log("Sending message with session ID:", sessionId);
-  console.log("Stream URL:", `${BASE_URL}:streamQuery`);
 
   const response = await fetch(`${BASE_URL}:streamQuery`, {
     method: "POST",
