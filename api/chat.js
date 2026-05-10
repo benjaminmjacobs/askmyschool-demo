@@ -50,19 +50,37 @@ async function createSession(token, userId) {
   const data = await response.json();
   console.log("Session created, full response:", JSON.stringify(data));
 
-  // Pull session ID from nested response.name, not the top level name
-  // Top level name is the operation, response.name is the actual session
   const sessionId = data.response.name.split("/").pop();
   console.log("Parsed session ID:", sessionId);
 
-  await sleep(2000);
+  await sleep(1000);
+
+  // Patch session state with current_date
+  const patchResponse = await fetch(
+    `${BASE_URL}/sessions/${sessionId}?updateMask=state`,
+    {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        state: {
+          current_date: getCurrentDateForAgent(),
+        },
+      }),
+    }
+  );
+
+  const patchData = await patchResponse.json();
+  console.log("Session patch response:", JSON.stringify(patchData));
+
+  await sleep(1000);
 
   return sessionId;
 }
 
 async function sendMessage(token, userId, sessionId, message) {
-  const messageWithDate = `[current_date: ${getCurrentDateForAgent()}] ${message}`;
-
   console.log("Sending message with session ID:", sessionId);
 
   const response = await fetch(`${BASE_URL}:streamQuery`, {
@@ -75,7 +93,7 @@ async function sendMessage(token, userId, sessionId, message) {
       input: {
         user_id: userId,
         session_id: sessionId,
-        message: messageWithDate,
+        message: message,
       },
     }),
   });
