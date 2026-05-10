@@ -1,5 +1,10 @@
 const { GoogleAuth } = require("google-auth-library");
 
+const PROJECT_ID = "346318948573";
+const LOCATION = "us-west1";
+const REASONING_ENGINE_ID = "6128000514060713984";
+const BASE_URL = `https://${LOCATION}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/${LOCATION}/reasoningEngines/${REASONING_ENGINE_ID}`;
+
 function getCurrentDateForAgent() {
   const formatter = new Intl.DateTimeFormat("en-CA", {
     timeZone: "America/New_York",
@@ -7,19 +12,57 @@ function getCurrentDateForAgent() {
     month: "2-digit",
     day: "2-digit",
   });
-
   return `${formatter.format(new Date())}[America/New_York]`;
+}
+
+async function getAuthClient() {
+  const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+  const auth = new GoogleAuth({
+    credentials,
+    scopes: ["https://www.googleapis.com/auth/cloud-platform"],
+  });
+  return auth.getClient();
+}
+
+async function createSession(client, userId) {
+  const response = await client.request({
+    url: `${BASE_URL}/sessions`,
+    method: "POST",
+    data: {
+      user_id: userId,
+      state: {
+        current_date: getCurrentDateForAgent(),
+      },
+    },
+  });
+  // response.data.name looks like:
+  // "projects/.../reasoningEngines/.../sessions/SESSION_ID"
+  const sessionId = response.data.name.split("/").pop();
+  return sessionId;
+}
+
+async function sendMessage(client, userId, sessionId, message) {
+  const response = await client.request({
+    url: `${BASE_URL}:streamQuery`,
+    method: "POST",
+    data: {
+      input: {
+        user_id: userId,
+        session_id: sessionId,
+        message: message,
+      },
+    },
+  });
+  return response.data;
 }
 
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
-    return res.status(405).json({
-      error: "Method not allowed",
-    });
+    return res.status(405).json({ error: "Method not allowed" });
   }
 
   try {
-    const { message } = req.body || {};
+    const { message, sessionId, userId } = req.body || {};
 
     if (!message || typeof message !== "string") {
       return res.status(400).json({
@@ -28,45 +71,15 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    const currentDate = getCurrentDateForAgent();
+    // Use provided userId or fall back to a default
+    const resolvedUserId = userId || "demo-user";
 
-    const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+    const client = await getAuthClient();
 
-    const auth = new GoogleAuth({
-      credentials,
-      scopes: ["https://www.googleapis.com/auth/cloud-platform"],
-    });
+    // If no sessionId provided, create a new session
+    let resolvedSessionId = sessionId;
+    if (!resolvedSessionId) {
+      resolvedSessionId = await createSession(client, resolvedUserId);
+    }
 
-    const client = await auth.getClient();
-
-    const endpoint =
-      "https://us-west1-aiplatform.googleapis.com/v1/projects/346318948573/locations/us-west1/reasoningEngines/6128000514060713984:streamQuery";
-
-    const response = await client.request({
-      url: endpoint,
-      method: "POST",
-      data: {
-        input: {
-          user_id: "demo-user",
-          session_id: "demo-session",
-          message: message,
-          state: {
-            current_date: currentDate,
-          },
-        },
-      },
-    });
-
-    return res.status(200).json(response.data);
-  } catch (error) {
-    console.error("AskMySchool API error:", error);
-
-    return res.status(500).json({
-      error: "Chat request failed",
-      details:
-        error.response?.data ||
-        error.message ||
-        "Unknown server error",
-    });
-  }
-};
+    const data =
