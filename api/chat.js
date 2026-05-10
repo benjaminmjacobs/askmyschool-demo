@@ -18,10 +18,6 @@ function getCurrentDateForAgent() {
   return `${formatter.format(new Date())}[America/New_York]`;
 }
 
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 async function getAccessToken() {
   const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
 
@@ -67,11 +63,7 @@ async function createSession(token, userId) {
     throw new Error(`Could not create session: ${JSON.stringify(data)}`);
   }
 
-  const sessionId = sessionName.split("/").pop();
-
-  await sleep(1000);
-
-  return sessionId;
+  return sessionName.split("/").pop();
 }
 
 function parseStreamResponse(text) {
