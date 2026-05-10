@@ -15,6 +15,10 @@ function getCurrentDateForAgent() {
   return `${formatter.format(new Date())}[America/New_York]`;
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function getAccessToken() {
   const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
   const auth = new GoogleAuth({
@@ -45,10 +49,14 @@ async function createSession(token, userId) {
 
   const data = await response.json();
   const sessionId = data.name.split("/").pop();
+
+  // Wait for session to be ready before returning
+  await sleep(1500);
+
   return sessionId;
 }
 
-async function sendMessage(token, userId, sessionId, message) {
+async function sendMessage(token, userId, sessionId, message, retries = 2) {
   const messageWithDate = `[current_date: ${getCurrentDateForAgent()}] ${message}`;
 
   const response = await fetch(`${BASE_URL}:streamQuery`, {
@@ -71,7 +79,19 @@ async function sendMessage(token, userId, sessionId, message) {
     throw new Error(JSON.stringify(err));
   }
 
-  return response.json();
+  const data = await response.json();
+
+  // If session not found and we have retries left, wait and try again
+  if (data.code === 498 || (data.message && data.message.includes("Session not found"))) {
+    if (retries > 0) {
+      console.log(`Session not ready, retrying in 2s... (${retries} retries left)`);
+      await sleep(2000);
+      return sendMessage(token, userId, sessionId, message, retries - 1);
+    }
+    throw new Error(`Session not found after retries: ${sessionId}`);
+  }
+
+  return data;
 }
 
 module.exports = async function handler(req, res) {
