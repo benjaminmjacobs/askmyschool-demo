@@ -2,8 +2,10 @@ const { GoogleAuth } = require("google-auth-library");
 
 const PROJECT_ID = "346318948573";
 const LOCATION = "us-west1";
-const REASONING_ENGINE_ID = "6128000514060713984";
-const BASE_URL = `https://${LOCATION}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/${LOCATION}/reasoningEngines/${REASONING_ENGINE_ID}`;
+const REASONING_ENGINE_ID = "8539678114517614592";
+
+const BASE_URL =
+  `https://${LOCATION}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/${LOCATION}/reasoningEngines/${REASONING_ENGINE_ID}`;
 
 function getCurrentDateForAgent() {
   const formatter = new Intl.DateTimeFormat("en-CA", {
@@ -12,76 +14,27 @@ function getCurrentDateForAgent() {
     month: "2-digit",
     day: "2-digit",
   });
-  return `${formatter.format(new Date())}[America/New_York]`;
-}
 
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  return `${formatter.format(new Date())}[America/New_York]`;
 }
 
 async function getAccessToken() {
   const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+
   const auth = new GoogleAuth({
     credentials,
     scopes: ["https://www.googleapis.com/auth/cloud-platform"],
   });
+
   const client = await auth.getClient();
   const tokenResponse = await client.getAccessToken();
+
   return tokenResponse.token;
 }
 
-async function createSession(token, userId) {
-  const response = await fetch(`${BASE_URL}/sessions`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      user_id: userId,
-    }),
-  });
-
-  if (!response.ok) {
-    const err = await response.json();
-    throw new Error(JSON.stringify(err));
-  }
-
-  const data = await response.json();
-  console.log("Session created, full response:", JSON.stringify(data));
-
-  const sessionId = data.response.name.split("/").pop();
-  console.log("Parsed session ID:", sessionId);
-
-  await sleep(1000);
-
-  // Patch session state with current_date
-  const patchResponse = await fetch(
-    `${BASE_URL}/sessions/${sessionId}?updateMask=state`,
-    {
-      method: "PATCH",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        state: {
-          current_date: getCurrentDateForAgent(),
-        },
-      }),
-    }
-  );
-
-  const patchData = await patchResponse.json();
-  console.log("Session patch response:", JSON.stringify(patchData));
-
-  await sleep(1000);
-
-  return sessionId;
-}
-
 async function sendMessage(token, userId, sessionId, message) {
-  console.log("Sending message with session ID:", sessionId);
+  const messageWithDate =
+    `[current_date: ${getCurrentDateForAgent()}]\n\n${message}`;
 
   const response = await fetch(`${BASE_URL}:streamQuery`, {
     method: "POST",
@@ -93,25 +46,25 @@ async function sendMessage(token, userId, sessionId, message) {
       input: {
         user_id: userId,
         session_id: sessionId,
-        message: message,
+        message: messageWithDate,
       },
     }),
   });
 
-  if (!response.ok) {
-    const err = await response.json();
-    throw new Error(JSON.stringify(err));
-  }
-
   const data = await response.json();
-  console.log("streamQuery response:", JSON.stringify(data));
+
+  if (!response.ok) {
+    throw new Error(JSON.stringify(data));
+  }
 
   return data;
 }
 
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
+    return res.status(405).json({
+      error: "Method not allowed",
+    });
   }
 
   try {
@@ -125,12 +78,9 @@ module.exports = async function handler(req, res) {
     }
 
     const resolvedUserId = userId || "demo-user";
-    const token = await getAccessToken();
+    const resolvedSessionId = sessionId || "demo-session";
 
-    let resolvedSessionId = sessionId;
-    if (!resolvedSessionId) {
-      resolvedSessionId = await createSession(token, resolvedUserId);
-    }
+    const token = await getAccessToken();
 
     const data = await sendMessage(
       token,
@@ -139,14 +89,10 @@ module.exports = async function handler(req, res) {
       message
     );
 
-    return res.status(200).json({
-      response: data,
-      sessionId: resolvedSessionId,
-      userId: resolvedUserId,
-    });
-
+    return res.status(200).json(data);
   } catch (error) {
     console.error("AskMySchool API error:", error);
+
     return res.status(500).json({
       error: "Chat request failed",
       details: error.message || "Unknown server error",
