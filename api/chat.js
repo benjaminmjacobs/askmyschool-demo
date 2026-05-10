@@ -2,7 +2,9 @@ const { GoogleAuth } = require("google-auth-library");
 
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
+    return res.status(405).json({
+      error: "Method not allowed",
+    });
   }
 
   try {
@@ -11,7 +13,7 @@ module.exports = async function handler(req, res) {
     if (!message || typeof message !== "string") {
       return res.status(400).json({
         error: "Missing message",
-        details: "Request body must include a message string."
+        details: "Request body must include a message string.",
       });
     }
 
@@ -31,10 +33,11 @@ module.exports = async function handler(req, res) {
       url: endpoint,
       method: "POST",
       data: {
+        classMethod: "stream_query",
         input: {
-          query: message
-        }
-      }
+          message: message,
+        },
+      },
     });
 
     return res.status(200).json(response.data);
@@ -46,7 +49,7 @@ module.exports = async function handler(req, res) {
       details:
         error.response?.data ||
         error.message ||
-        "Unknown server error"
+        "Unknown server error",
     });
   }
 };
