@@ -2,9 +2,7 @@ const { GoogleAuth } = require("google-auth-library");
 
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
-    return res.status(405).json({
-      error: "Method not allowed",
-    });
+    return res.status(405).json({ error: "Method not allowed" });
   }
 
   try {
@@ -33,9 +31,8 @@ module.exports = async function handler(req, res) {
       url: endpoint,
       method: "POST",
       data: {
-        classMethod: "stream_query",
         input: {
-          message: message,
+          text: message,
         },
       },
     });
