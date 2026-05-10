@@ -11,8 +11,9 @@
     .msg { margin:10px 0; line-height:1.5; }
     .user { font-weight:bold; color:#2f5d46; }
     .bot { color:#333; }
-    textarea { width:100%; height:80px; margin-top:14px; padding:12px; border-radius:10px; border:1px solid #ccc; font-size:16px; }
+    textarea { width:100%; height:80px; margin-top:14px; padding:12px; border-radius:10px; border:1px solid #ccc; font-size:16px; box-sizing:border-box; }
     button { margin-top:10px; padding:12px 20px; background:#2f5d46; color:white; border:0; border-radius:10px; font-weight:bold; cursor:pointer; }
+    button:disabled { opacity:.6; cursor:not-allowed; }
   </style>
 </head>
 <body>
@@ -26,40 +27,88 @@
       </div>
 
       <textarea id="input" placeholder="Example: What's for lunch at the primary school?"></textarea>
-      <button onclick="sendMessage()">Send</button>
+      <button id="sendButton" onclick="sendMessage()">Send</button>
     </div>
   </div>
 
   <script>
+    let askMySchoolSessionId = null;
+    let askMySchoolUserId = "demo-user";
+
     async function sendMessage() {
       const input = document.getElementById("input");
       const messages = document.getElementById("messages");
+      const button = document.getElementById("sendButton");
+
       const text = input.value.trim();
       if (!text) return;
 
-      messages.innerHTML += `<div class="msg user">You: ${text}</div>`;
+      messages.innerHTML += `<div class="msg user">You: ${escapeHtml(text)}</div>`;
       input.value = "";
-      messages.innerHTML += `<div class="msg bot">AskMySchool is thinking...</div>`;
+      button.disabled = true;
+
+      const thinkingId = `thinking-${Date.now()}`;
+      messages.innerHTML += `<div id="${thinkingId}" class="msg bot">AskMySchool is thinking...</div>`;
+      messages.scrollTop = messages.scrollHeight;
 
       try {
         const res = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: text })
+          body: JSON.stringify({
+            message: text,
+            sessionId: askMySchoolSessionId,
+            userId: askMySchoolUserId
+          })
         });
 
         const data = await res.json();
+
+        if (data.sessionId) {
+          askMySchoolSessionId = data.sessionId;
+        }
+
+        if (data.userId) {
+          askMySchoolUserId = data.userId;
+        }
+
         const answer =
+          data.text ||
           data.output?.text ||
           data.response?.text ||
-          data.text ||
           JSON.stringify(data, null, 2);
 
-        messages.innerHTML += `<div class="msg bot"><strong>AskMySchool:</strong> ${answer}</div>`;
+        const thinking = document.getElementById(thinkingId);
+        if (thinking) {
+          thinking.innerHTML = `<strong>AskMySchool:</strong> ${escapeHtml(answer)}`;
+        }
       } catch (e) {
-        messages.innerHTML += `<div class="msg bot">Error: ${e.message}</div>`;
+        const thinking = document.getElementById(thinkingId);
+        if (thinking) {
+          thinking.textContent = `Error: ${e.message}`;
+        }
+      } finally {
+        button.disabled = false;
+        input.focus();
+        messages.scrollTop = messages.scrollHeight;
       }
     }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    document.getElementById("input").addEventListener("keydown", function(event) {
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        sendMessage();
+      }
+    });
   </script>
 </body>
 </html>
