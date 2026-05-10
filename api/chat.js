@@ -48,7 +48,14 @@ async function createSession(token, userId) {
     }),
   });
 
-  const data = await response.json();
+  const text = await response.text();
+
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error(`Session response was not JSON: ${text}`);
+  }
 
   if (!response.ok) {
     throw new Error(JSON.stringify(data));
@@ -65,6 +72,41 @@ async function createSession(token, userId) {
   await sleep(1000);
 
   return sessionId;
+}
+
+function parseStreamResponse(text) {
+  const lines = text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const chunks = [];
+
+  for (const line of lines) {
+    try {
+      chunks.push(JSON.parse(line));
+    } catch {
+      // Ignore non-JSON stream lines
+    }
+  }
+
+  const collectedText = chunks
+    .map((chunk) => {
+      return (
+        chunk.content?.parts?.map((part) => part.text).filter(Boolean).join("") ||
+        chunk.output?.text ||
+        chunk.response?.text ||
+        chunk.text ||
+        ""
+      );
+    })
+    .filter(Boolean)
+    .join("");
+
+  return {
+    text: collectedText || JSON.stringify(chunks, null, 2),
+    raw: chunks,
+  };
 }
 
 async function sendMessage(token, userId, sessionId, message) {
@@ -86,13 +128,13 @@ async function sendMessage(token, userId, sessionId, message) {
     }),
   });
 
-  const data = await response.json();
+  const text = await response.text();
 
   if (!response.ok) {
-    throw new Error(JSON.stringify(data));
+    throw new Error(text);
   }
 
-  return data;
+  return parseStreamResponse(text);
 }
 
 module.exports = async function handler(req, res) {
@@ -129,7 +171,8 @@ module.exports = async function handler(req, res) {
     );
 
     return res.status(200).json({
-      response: data,
+      text: data.text,
+      raw: data.raw,
       sessionId: resolvedSessionId,
       userId: resolvedUserId,
     });
