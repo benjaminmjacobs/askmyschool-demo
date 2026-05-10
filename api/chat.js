@@ -32,7 +32,7 @@ module.exports = async function handler(req, res) {
       method: "POST",
       data: {
         input: {
-          message: message
+          query: message
         }
       }
     });
