@@ -18,6 +18,10 @@ function getCurrentDateForAgent() {
   return `${formatter.format(new Date())}[America/New_York]`;
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function getAccessToken() {
   const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
 
@@ -30,6 +34,37 @@ async function getAccessToken() {
   const tokenResponse = await client.getAccessToken();
 
   return tokenResponse.token;
+}
+
+async function createSession(token, userId) {
+  const response = await fetch(`${BASE_URL}/sessions`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      user_id: userId,
+    }),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(JSON.stringify(data));
+  }
+
+  const sessionName = data.response?.name || data.name;
+
+  if (!sessionName) {
+    throw new Error(`Could not create session: ${JSON.stringify(data)}`);
+  }
+
+  const sessionId = sessionName.split("/").pop();
+
+  await sleep(1000);
+
+  return sessionId;
 }
 
 async function sendMessage(token, userId, sessionId, message) {
@@ -78,9 +113,13 @@ module.exports = async function handler(req, res) {
     }
 
     const resolvedUserId = userId || "demo-user";
-    const resolvedSessionId = sessionId || "demo-session";
-
     const token = await getAccessToken();
+
+    let resolvedSessionId = sessionId;
+
+    if (!resolvedSessionId) {
+      resolvedSessionId = await createSession(token, resolvedUserId);
+    }
 
     const data = await sendMessage(
       token,
@@ -89,7 +128,11 @@ module.exports = async function handler(req, res) {
       message
     );
 
-    return res.status(200).json(data);
+    return res.status(200).json({
+      response: data,
+      sessionId: resolvedSessionId,
+      userId: resolvedUserId,
+    });
   } catch (error) {
     console.error("AskMySchool API error:", error);
 
