@@ -31,8 +31,11 @@ module.exports = async function handler(req, res) {
       url: endpoint,
       method: "POST",
       data: {
+        classMethod: "stream_query",
         input: {
-          text: message,
+          user_id: "demo-user",
+          session_id: "demo-session",
+          message: message,
         },
       },
     });
