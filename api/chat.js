@@ -30,8 +30,8 @@ async function createSession(client, userId) {
     method: "POST",
     data: {
       user_id: userId,
-      state: {
-        current_date: getCurrentDateForAgent(),
+      session: {
+        state: `{"current_date": "${getCurrentDateForAgent()}"}`,
       },
     },
   });
