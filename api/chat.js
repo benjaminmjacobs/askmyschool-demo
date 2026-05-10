@@ -2,7 +2,9 @@ const { GoogleAuth } = require("google-auth-library");
 
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
+    return res.status(405).json({
+      error: "Method not allowed",
+    });
   }
 
   try {
@@ -15,11 +17,15 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+    const credentials = JSON.parse(
+      process.env.GOOGLE_SERVICE_ACCOUNT_JSON
+    );
 
     const auth = new GoogleAuth({
       credentials,
-      scopes: ["https://www.googleapis.com/auth/cloud-platform"],
+      scopes: [
+        "https://www.googleapis.com/auth/cloud-platform",
+      ],
     });
 
     const client = await auth.getClient();
@@ -31,7 +37,6 @@ module.exports = async function handler(req, res) {
       url: endpoint,
       method: "POST",
       data: {
-        classMethod: "stream_query",
         input: {
           user_id: "demo-user",
           session_id: "demo-session",
@@ -41,6 +46,7 @@ module.exports = async function handler(req, res) {
     });
 
     return res.status(200).json(response.data);
+
   } catch (error) {
     console.error("AskMySchool API error:", error);
 
