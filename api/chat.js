@@ -35,9 +35,6 @@ async function createSession(token, userId) {
     },
     body: JSON.stringify({
       user_id: userId,
-      state: JSON.stringify({
-        current_date: getCurrentDateForAgent(),
-      }),
     }),
   });
 
@@ -52,6 +49,8 @@ async function createSession(token, userId) {
 }
 
 async function sendMessage(token, userId, sessionId, message) {
+  const messageWithDate = `[current_date: ${getCurrentDateForAgent()}] ${message}`;
+
   const response = await fetch(`${BASE_URL}:streamQuery`, {
     method: "POST",
     headers: {
@@ -62,7 +61,7 @@ async function sendMessage(token, userId, sessionId, message) {
       input: {
         user_id: userId,
         session_id: sessionId,
-        message: message,
+        message: messageWithDate,
       },
     }),
   });
