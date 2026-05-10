@@ -31,7 +31,9 @@ module.exports = async function handler(req, res) {
       url: endpoint,
       method: "POST",
       data: {
-        input: message
+        input: {
+          message: message
+        }
       }
     });
 
