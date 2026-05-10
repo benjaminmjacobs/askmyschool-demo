@@ -35,8 +35,6 @@ async function createSession(client, userId) {
       },
     },
   });
-  // response.data.name looks like:
-  // "projects/.../reasoningEngines/.../sessions/SESSION_ID"
   const sessionId = response.data.name.split("/").pop();
   return sessionId;
 }
@@ -71,15 +69,32 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // Use provided userId or fall back to a default
     const resolvedUserId = userId || "demo-user";
-
     const client = await getAuthClient();
 
-    // If no sessionId provided, create a new session
     let resolvedSessionId = sessionId;
     if (!resolvedSessionId) {
       resolvedSessionId = await createSession(client, resolvedUserId);
     }
 
-    const data =
+    const data = await sendMessage(
+      client,
+      resolvedUserId,
+      resolvedSessionId,
+      message
+    );
+
+    return res.status(200).json({
+      response: data,
+      sessionId: resolvedSessionId,
+      userId: resolvedUserId,
+    });
+
+  } catch (error) {
+    console.error("AskMySchool API error:", error);
+    return res.status(500).json({
+      error: "Chat request failed",
+      details: error.response?.data || error.message || "Unknown server error",
+    });
+  }
+};
