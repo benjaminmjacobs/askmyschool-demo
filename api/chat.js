@@ -3,7 +3,9 @@ const { GoogleAuth } = require("google-auth-library");
 const PROJECT_ID = "346318948573";
 const LOCATION = "us-west1";
 const REASONING_ENGINE_ID = "6128000514060713984";
-const BASE_URL = `https://${LOCATION}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/${LOCATION}/reasoningEngines/${REASONING_ENGINE_ID}`;
+
+const BASE_URL =
+  `https://${LOCATION}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/${LOCATION}/reasoningEngines/${REASONING_ENGINE_ID}`;
 
 function getCurrentDateForAgent() {
   const formatter = new Intl.DateTimeFormat("en-CA", {
@@ -12,31 +14,45 @@ function getCurrentDateForAgent() {
     month: "2-digit",
     day: "2-digit",
   });
+
   return `${formatter.format(new Date())}[America/New_York]`;
 }
 
 async function getAuthClient() {
   const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+
   const auth = new GoogleAuth({
     credentials,
     scopes: ["https://www.googleapis.com/auth/cloud-platform"],
   });
+
   return auth.getClient();
 }
 
 async function createSession(client, userId) {
   const response = await client.request({
-    url: `${BASE_URL}/sessions`,
+    url: `${BASE_URL}:query`,
     method: "POST",
     data: {
-      user_id: userId,
-      session: {
-        state: `{"current_date": "${getCurrentDateForAgent()}"}`,
+      classMethod: "create_session",
+      input: {
+        user_id: userId,
+        state: {
+          current_date: getCurrentDateForAgent(),
+        },
       },
     },
   });
-  const sessionId = response.data.name.split("/").pop();
-  return sessionId;
+
+  const name = response.data?.output?.name || response.data?.name;
+
+  if (!name) {
+    throw new Error(
+      `Could not create session. Response: ${JSON.stringify(response.data)}`
+    );
+  }
+
+  return name.split("/").pop();
 }
 
 async function sendMessage(client, userId, sessionId, message) {
@@ -47,16 +63,19 @@ async function sendMessage(client, userId, sessionId, message) {
       input: {
         user_id: userId,
         session_id: sessionId,
-        message: message,
+        message,
       },
     },
   });
+
   return response.data;
 }
 
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
+    return res.status(405).json({
+      error: "Method not allowed",
+    });
   }
 
   try {
@@ -73,6 +92,7 @@ module.exports = async function handler(req, res) {
     const client = await getAuthClient();
 
     let resolvedSessionId = sessionId;
+
     if (!resolvedSessionId) {
       resolvedSessionId = await createSession(client, resolvedUserId);
     }
@@ -85,16 +105,18 @@ module.exports = async function handler(req, res) {
     );
 
     return res.status(200).json({
-      response: data,
       sessionId: resolvedSessionId,
-      userId: resolvedUserId,
+      data,
     });
-
   } catch (error) {
     console.error("AskMySchool API error:", error);
+
     return res.status(500).json({
       error: "Chat request failed",
-      details: error.response?.data || error.message || "Unknown server error",
+      details:
+        error.response?.data ||
+        error.message ||
+        "Unknown server error",
     });
   }
 };
