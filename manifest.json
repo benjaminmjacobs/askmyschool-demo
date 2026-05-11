@@ -1,0 +1,17 @@
+{
+  "name": "AskMySchool",
+  "short_name": "AskMySchool",
+  "description": "Trusted school information. Instant answers.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FFF6E6",
+  "theme_color": "#0A6D80",
+  "icons": [
+    {
+      "src": "/icon-1024.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
