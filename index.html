@@ -1,55 +1,532 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>AskMySchool Demo</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+
+  <title>AskMySchool</title>
+  <meta name="description" content="Trusted school information. Instant answers." />
+
+  <meta name="theme-color" content="#0A6D80" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="AskMySchool" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+
+  <link rel="icon" href="/icon-1024.png" />
+  <link rel="apple-touch-icon" href="/icon-1024.png" />
+
   <style>
-    body { font-family: Arial, sans-serif; background:#f4f1ea; color:#1f3527; margin:0; padding:24px; }
-    .wrap { max-width:800px; margin:0 auto; }
-    .chat { background:white; border-radius:16px; padding:20px; box-shadow:0 8px 30px rgba(0,0,0,.08); }
-    #messages { min-height:360px; border:1px solid #ddd; padding:16px; border-radius:12px; background:#fafafa; overflow:auto; }
-    .msg { margin:10px 0; line-height:1.5; }
-    .user { font-weight:bold; color:#2f5d46; }
-    .bot { color:#333; }
-    textarea { width:100%; height:80px; margin-top:14px; padding:12px; border-radius:10px; border:1px solid #ccc; font-size:16px; box-sizing:border-box; }
-    button { margin-top:10px; padding:12px 20px; background:#2f5d46; color:white; border:0; border-radius:10px; font-weight:bold; cursor:pointer; }
-    button:disabled { opacity:.6; cursor:not-allowed; }
+    :root {
+      --teal: #0A6D80;
+      --aqua: #6DBBB7;
+      --yellow: #F4C23E;
+      --coral: #F26B5B;
+      --evergreen: #134D45;
+      --cream: #FFF6E6;
+      --charcoal: #2B2F32;
+      --white: #ffffff;
+      --border: rgba(19, 77, 69, 0.14);
+      --shadow: 0 18px 55px rgba(19, 77, 69, 0.16);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      min-height: 100%;
+    }
+
+    body {
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(244, 194, 62, 0.28), transparent 36%),
+        radial-gradient(circle at bottom right, rgba(109, 187, 183, 0.30), transparent 38%),
+        var(--cream);
+      color: var(--charcoal);
+    }
+
+    .page {
+      min-height: 100vh;
+      padding: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .app-shell {
+      width: 100%;
+      max-width: 540px;
+      min-height: min(860px, calc(100vh - 44px));
+      background: rgba(255, 255, 255, 0.94);
+      border: 1px solid var(--border);
+      border-radius: 34px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .app-header {
+      padding: 22px 22px 18px;
+      background:
+        linear-gradient(135deg, rgba(10, 109, 128, 0.10), rgba(244, 194, 62, 0.18)),
+        var(--white);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .brand-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .brand-icon {
+      width: 58px;
+      height: 58px;
+      border-radius: 18px;
+      background: var(--cream);
+      box-shadow: 0 8px 22px rgba(10, 109, 128, 0.16);
+      object-fit: cover;
+    }
+
+    .brand-text h1 {
+      margin: 0;
+      font-size: 25px;
+      line-height: 1;
+      color: var(--evergreen);
+      letter-spacing: -0.035em;
+    }
+
+    .brand-text p {
+      margin: 6px 0 0;
+      font-size: 13px;
+      color: rgba(43, 47, 50, 0.68);
+    }
+
+    .district-pill {
+      margin-top: 16px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(10, 109, 128, 0.10);
+      color: var(--evergreen);
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .status-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 99px;
+      background: #2FA66A;
+      box-shadow: 0 0 0 4px rgba(47, 166, 106, 0.12);
+    }
+
+    .quick-prompts {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding: 14px 18px;
+      background: rgba(255, 246, 230, 0.48);
+      border-bottom: 1px solid var(--border);
+      scrollbar-width: none;
+    }
+
+    .quick-prompts::-webkit-scrollbar {
+      display: none;
+    }
+
+    .chip {
+      flex: 0 0 auto;
+      border: 1px solid rgba(10, 109, 128, 0.18);
+      background: var(--white);
+      color: var(--evergreen);
+      border-radius: 999px;
+      padding: 9px 13px;
+      font-size: 13px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .chip:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 18px rgba(10, 109, 128, 0.12);
+    }
+
+    .messages {
+      flex: 1;
+      padding: 20px 18px;
+      overflow-y: auto;
+      background:
+        linear-gradient(180deg, rgba(255, 246, 230, 0.58), rgba(255, 255, 255, 0.9));
+    }
+
+    .welcome-card {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 18px;
+      box-shadow: 0 10px 30px rgba(19, 77, 69, 0.08);
+      margin-bottom: 16px;
+    }
+
+    .welcome-card h2 {
+      margin: 0 0 8px;
+      color: var(--evergreen);
+      font-size: 20px;
+      letter-spacing: -0.02em;
+    }
+
+    .welcome-card p {
+      margin: 0;
+      color: rgba(43, 47, 50, 0.72);
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .message-row {
+      display: flex;
+      gap: 10px;
+      margin: 14px 0;
+      align-items: flex-end;
+    }
+
+    .message-row.user {
+      justify-content: flex-end;
+    }
+
+    .avatar {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      flex: 0 0 auto;
+      background: var(--cream);
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    .avatar img {
+      width: 26px;
+      height: 26px;
+      object-fit: contain;
+    }
+
+    .user-avatar {
+      background: var(--coral);
+      color: white;
+      font-weight: 900;
+      font-size: 13px;
+    }
+
+    .bubble {
+      max-width: 82%;
+      padding: 13px 15px;
+      border-radius: 20px;
+      font-size: 15px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    .bot .bubble {
+      background: var(--white);
+      color: var(--charcoal);
+      border: 1px solid var(--border);
+      border-bottom-left-radius: 7px;
+      box-shadow: 0 8px 22px rgba(19, 77, 69, 0.08);
+    }
+
+    .user .bubble {
+      background: var(--teal);
+      color: white;
+      border-bottom-right-radius: 7px;
+    }
+
+    .bubble strong {
+      color: var(--evergreen);
+    }
+
+    .notice {
+      border-left: 5px solid var(--coral) !important;
+      background: #fff7f2 !important;
+    }
+
+    .typing {
+      display: flex;
+      gap: 5px;
+      align-items: center;
+      height: 20px;
+    }
+
+    .typing span {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--aqua);
+      animation: bounce 1s infinite ease-in-out;
+    }
+
+    .typing span:nth-child(2) {
+      animation-delay: 0.16s;
+    }
+
+    .typing span:nth-child(3) {
+      animation-delay: 0.32s;
+    }
+
+    @keyframes bounce {
+      0%, 80%, 100% {
+        transform: translateY(0);
+        opacity: 0.45;
+      }
+
+      40% {
+        transform: translateY(-5px);
+        opacity: 1;
+      }
+    }
+
+    .composer {
+      padding: 16px;
+      background: var(--white);
+      border-top: 1px solid var(--border);
+    }
+
+    .input-wrap {
+      display: flex;
+      gap: 10px;
+      align-items: flex-end;
+      background: #fafafa;
+      border: 1px solid rgba(43, 47, 50, 0.14);
+      border-radius: 22px;
+      padding: 10px;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 48px;
+      max-height: 140px;
+      resize: none;
+      border: 0;
+      outline: 0;
+      background: transparent;
+      color: var(--charcoal);
+      font: inherit;
+      font-size: 15px;
+      line-height: 1.35;
+      padding: 5px 4px;
+    }
+
+    textarea::placeholder {
+      color: rgba(43, 47, 50, 0.45);
+    }
+
+    button.send {
+      width: 48px;
+      height: 48px;
+      border: 0;
+      border-radius: 17px;
+      background: var(--coral);
+      color: white;
+      font-weight: 900;
+      font-size: 19px;
+      cursor: pointer;
+      flex: 0 0 auto;
+      box-shadow: 0 8px 20px rgba(242, 107, 91, 0.28);
+      transition: transform 0.15s ease, opacity 0.15s ease;
+    }
+
+    button.send:hover {
+      transform: translateY(-1px);
+    }
+
+    button.send:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .fine-print {
+      text-align: center;
+      margin-top: 10px;
+      font-size: 11px;
+      color: rgba(43, 47, 50, 0.48);
+    }
+
+    @media (max-width: 560px) {
+      .page {
+        padding: 0;
+        align-items: stretch;
+      }
+
+      .app-shell {
+        min-height: 100vh;
+        max-width: none;
+        border-radius: 0;
+        border: 0;
+      }
+
+      .app-header {
+        padding-top: max(18px, env(safe-area-inset-top));
+      }
+
+      .brand-text h1 {
+        font-size: 22px;
+      }
+
+      .bubble {
+        max-width: 86%;
+      }
+    }
   </style>
 </head>
-<body>
-  <div class="wrap">
-    <h1>AskMySchool Demo</h1>
-    <p>Stress test demo for school information questions.</p>
 
-    <div class="chat">
-      <div id="messages">
-        <div class="msg bot">Ask a school question to begin.</div>
+<body>
+  <main class="page">
+    <section class="app-shell" aria-label="AskMySchool chat application">
+      <header class="app-header">
+        <div class="brand-row">
+          <img class="brand-icon" src="/icon-1024.png" alt="AskMySchool icon" />
+          <div class="brand-text">
+            <h1>AskMySchool</h1>
+            <p>Trusted school information. Instant answers.</p>
+          </div>
+        </div>
+
+        <div class="district-pill">
+          <span class="status-dot"></span>
+          Ben Hill County Schools Demo
+        </div>
+      </header>
+
+      <div class="quick-prompts" aria-label="Suggested questions">
+        <button class="chip" onclick="usePrompt('What is for lunch tomorrow at the primary school?')">Lunch tomorrow</button>
+        <button class="chip" onclick="usePrompt('Is there school tomorrow?')">School tomorrow?</button>
+        <button class="chip" onclick="usePrompt('When is graduation this year?')">Graduation</button>
+        <button class="chip" onclick="usePrompt('What time does school start?')">Start times</button>
       </div>
 
-      <textarea id="input" placeholder="Example: What's for lunch at the primary school?"></textarea>
-      <button id="sendButton" onclick="sendMessage()">Send</button>
-    </div>
-  </div>
+      <section id="messages" class="messages" aria-live="polite">
+        <div class="welcome-card">
+          <h2>What do you need to know?</h2>
+          <p>Ask about menus, calendars, school events, closures, policies, or district information.</p>
+        </div>
+      </section>
+
+      <footer class="composer">
+        <div class="input-wrap">
+          <textarea
+            id="input"
+            placeholder="Ask a school question..."
+            rows="1"
+            aria-label="Ask a school question"
+          ></textarea>
+          <button id="sendButton" class="send" onclick="sendMessage()" aria-label="Send message">➤</button>
+        </div>
+        <div class="fine-print">Answers are based on available district documents and active updates.</div>
+      </footer>
+    </section>
+  </main>
 
   <script>
     let askMySchoolSessionId = null;
     let askMySchoolUserId = "demo-user";
 
-    async function sendMessage() {
-      const input = document.getElementById("input");
-      const messages = document.getElementById("messages");
-      const button = document.getElementById("sendButton");
+    const input = document.getElementById("input");
+    const messages = document.getElementById("messages");
+    const button = document.getElementById("sendButton");
 
+    function usePrompt(text) {
+      input.value = text;
+      input.focus();
+    }
+
+    function addUserMessage(text) {
+      const row = document.createElement("div");
+      row.className = "message-row user";
+
+      const bubble = document.createElement("div");
+      bubble.className = "bubble";
+      bubble.textContent = text;
+
+      const avatar = document.createElement("div");
+      avatar.className = "avatar user-avatar";
+      avatar.textContent = "You";
+
+      row.appendChild(bubble);
+      row.appendChild(avatar);
+      messages.appendChild(row);
+      scrollMessages();
+    }
+
+    function addBotMessage(text, options = {}) {
+      const row = document.createElement("div");
+      row.className = "message-row bot";
+
+      const avatar = document.createElement("div");
+      avatar.className = "avatar";
+
+      const avatarImg = document.createElement("img");
+      avatarImg.src = "/icon-transparent.png";
+      avatarImg.alt = "AskMySchool";
+      avatar.appendChild(avatarImg);
+
+      const bubble = document.createElement("div");
+      bubble.className = options.notice ? "bubble notice" : "bubble";
+      bubble.innerHTML = formatAnswer(text);
+
+      row.appendChild(avatar);
+      row.appendChild(bubble);
+      messages.appendChild(row);
+      scrollMessages();
+
+      return bubble;
+    }
+
+    function addTypingMessage() {
+      const row = document.createElement("div");
+      row.className = "message-row bot";
+
+      const avatar = document.createElement("div");
+      avatar.className = "avatar";
+
+      const avatarImg = document.createElement("img");
+      avatarImg.src = "/icon-transparent.png";
+      avatarImg.alt = "AskMySchool";
+      avatar.appendChild(avatarImg);
+
+      const bubble = document.createElement("div");
+      bubble.className = "bubble";
+      bubble.innerHTML = '<div class="typing"><span></span><span></span><span></span></div>';
+
+      row.appendChild(avatar);
+      row.appendChild(bubble);
+      messages.appendChild(row);
+      scrollMessages();
+
+      return row;
+    }
+
+    async function sendMessage() {
       const text = input.value.trim();
       if (!text) return;
 
-      messages.innerHTML += `<div class="msg user">You: ${escapeHtml(text)}</div>`;
+      addUserMessage(text);
       input.value = "";
-      button.disabled = true;
+      autoResizeInput();
 
-      const thinkingId = `thinking-${Date.now()}`;
-      messages.innerHTML += `<div id="${thinkingId}" class="msg bot">AskMySchool is thinking...</div>`;
-      messages.scrollTop = messages.scrollHeight;
+      button.disabled = true;
+      const typingRow = addTypingMessage();
 
       try {
         const res = await fetch("/api/chat", {
@@ -78,20 +555,29 @@
           data.response?.text ||
           JSON.stringify(data, null, 2);
 
-        const thinking = document.getElementById(thinkingId);
-        if (thinking) {
-          thinking.innerHTML = `<strong>AskMySchool:</strong> ${escapeHtml(answer)}`;
-        }
-      } catch (e) {
-        const thinking = document.getElementById(thinkingId);
-        if (thinking) {
-          thinking.textContent = `Error: ${e.message}`;
-        }
+        typingRow.remove();
+
+        const isNotice = String(answer).toLowerCase().includes("update notice:");
+        addBotMessage(answer, { notice: isNotice });
+      } catch (error) {
+        typingRow.remove();
+        addBotMessage("Sorry, something went wrong. Please try again.");
+        console.error("AskMySchool UI error:", error);
       } finally {
         button.disabled = false;
         input.focus();
-        messages.scrollTop = messages.scrollHeight;
+        scrollMessages();
       }
+    }
+
+    function formatAnswer(value) {
+      let text = escapeHtml(value);
+
+      text = text.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+      text = text.replace(/Update Notice:/g, "<strong>Update Notice:</strong>");
+      text = text.replace(/\n/g, "<br>");
+
+      return text;
     }
 
     function escapeHtml(value) {
@@ -103,7 +589,18 @@
         .replaceAll("'", "&#039;");
     }
 
-    document.getElementById("input").addEventListener("keydown", function(event) {
+    function scrollMessages() {
+      messages.scrollTop = messages.scrollHeight;
+    }
+
+    function autoResizeInput() {
+      input.style.height = "auto";
+      input.style.height = Math.min(input.scrollHeight, 140) + "px";
+    }
+
+    input.addEventListener("input", autoResizeInput);
+
+    input.addEventListener("keydown", function(event) {
       if (event.key === "Enter" && !event.shiftKey) {
         event.preventDefault();
         sendMessage();
