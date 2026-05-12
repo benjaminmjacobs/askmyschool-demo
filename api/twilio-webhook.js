@@ -3,6 +3,22 @@ const { GoogleAuth } = require("google-auth-library");
 const PROJECT_ID = "pinevera-askmyschool";
 const FIRESTORE_DATABASE = "%28default%29";
 
+const SCHOOL_OPTIONS = {
+  "1": { school_id: "districtwide", label: "Districtwide" },
+  "2": { school_id: "ben_hill_primary", label: "Ben Hill Primary School" },
+  "3": { school_id: "ben_hill_elementary", label: "Ben Hill Elementary School" },
+  "4": { school_id: "ben_hill_middle", label: "Ben Hill Middle School" },
+  "5": { school_id: "fitzgerald_high", label: "Fitzgerald High School" },
+};
+
+const CATEGORY_OPTIONS = {
+  "1": { category: "closure", title: "School Closure", priority: "high" },
+  "2": { category: "delay", title: "School Delay", priority: "high" },
+  "3": { category: "bus_delay", title: "Bus Delay", priority: "normal" },
+  "4": { category: "event_change", title: "Event Change", priority: "normal" },
+  "5": { category: "other", title: "Emergency Update", priority: "normal" },
+};
+
 async function getAccessToken() {
   const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
 
@@ -43,8 +59,12 @@ function getIncomingBody(req) {
   return Object.fromEntries(params.entries());
 }
 
+function firestoreBaseUrl() {
+  return `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/${FIRESTORE_DATABASE}/documents`;
+}
+
 async function firestoreRunQuery(token, collectionId, whereField, whereValue) {
-  const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/${FIRESTORE_DATABASE}/documents:runQuery`;
+  const url = `${firestoreBaseUrl()}:runQuery`;
 
   const response = await fetch(url, {
     method: "POST",
@@ -74,12 +94,11 @@ async function firestoreRunQuery(token, collectionId, whereField, whereValue) {
   }
 
   const found = data.find((item) => item.document);
-
   return found?.document || null;
 }
 
 async function createFirestoreDocument(token, collectionId, fields) {
-  const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/${FIRESTORE_DATABASE}/documents/${collectionId}`;
+  const url = `${firestoreBaseUrl()}/${collectionId}`;
 
   const response = await fetch(url, {
     method: "POST",
@@ -99,6 +118,48 @@ async function createFirestoreDocument(token, collectionId, fields) {
   return data;
 }
 
+async function updateFirestoreDocument(token, documentName, fields) {
+  const fieldPaths = Object.keys(fields)
+    .map((field) => `updateMask.fieldPaths=${encodeURIComponent(field)}`)
+    .join("&");
+
+  const url = `https://firestore.googleapis.com/v1/${documentName}?${fieldPaths}`;
+
+  const response = await fetch(url, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ fields }),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(JSON.stringify(data));
+  }
+
+  return data;
+}
+
+async function deleteFirestoreDocument(token, documentName) {
+  const url = `https://firestore.googleapis.com/v1/${documentName}`;
+
+  const response = await fetch(url, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    const data = await response.json();
+    throw new Error(JSON.stringify(data));
+  }
+}
+
 function toFirestoreString(value) {
   return { stringValue: String(value || "") };
 }
@@ -109,6 +170,10 @@ function toFirestoreBoolean(value) {
 
 function toFirestoreTimestamp(date) {
   return { timestampValue: date.toISOString() };
+}
+
+function toFirestoreInteger(value) {
+  return { integerValue: String(value || 0) };
 }
 
 function readField(document, fieldName) {
@@ -125,12 +190,116 @@ function readField(document, fieldName) {
   );
 }
 
-function getTomorrowAtSixPmEastern() {
+function addHours(hours) {
+  const date = new Date();
+  date.setHours(date.getHours() + hours);
+  return date;
+}
+
+function endOfSchoolDay() {
+  const date = new Date();
+  date.setHours(18, 0, 0, 0);
+  return date;
+}
+
+function tomorrowAtSixPm() {
+  const date = new Date();
+  date.setDate(date.getDate() + 1);
+  date.setHours(18, 0, 0, 0);
+  return date;
+}
+
+function getExpiration(option) {
+  if (option === "1") return addHours(2);
+  if (option === "2") return endOfSchoolDay();
+  if (option === "3") return tomorrowAtSixPm();
+  return tomorrowAtSixPm();
+}
+
+function startMessage() {
+  return (
+    "AskMySchool Rapid Notice\n\n" +
+    "Who should this update apply to?\n" +
+    "1 Districtwide\n" +
+    "2 Primary\n" +
+    "3 Elementary\n" +
+    "4 Middle\n" +
+    "5 High School\n\n" +
+    "Reply with a number."
+  );
+}
+
+function categoryMessage() {
+  return (
+    "What type of update is this?\n" +
+    "1 Closure\n" +
+    "2 Delay\n" +
+    "3 Bus delay\n" +
+    "4 Event change\n" +
+    "5 Other\n\n" +
+    "Reply with a number."
+  );
+}
+
+function expirationMessage() {
+  return (
+    "When should this update expire?\n" +
+    "1 In 2 hours\n" +
+    "2 End of school day\n" +
+    "3 Tomorrow at 6 PM\n\n" +
+    "Reply with a number."
+  );
+}
+
+function confirmMessage(session) {
+  const schoolLabel = readField(session, "school_label");
+  const title = readField(session, "title");
+  const message = readField(session, "message");
+
+  return (
+    "Review this update:\n\n" +
+    `Scope: ${schoolLabel}\n` +
+    `Type: ${title}\n` +
+    `Message: ${message}\n\n` +
+    "Reply YES to publish or NO to cancel."
+  );
+}
+
+async function createOrResetSession(token, senderDoc, fromPhone) {
+  const districtId = readField(senderDoc, "district_id");
+  const staffName = readField(senderDoc, "staff_name");
+
+  return await createFirestoreDocument(token, "emergency_update_sessions", {
+    phone_number: toFirestoreString(fromPhone),
+    district_id: toFirestoreString(districtId),
+    staff_name: toFirestoreString(staffName),
+    step: toFirestoreString("scope"),
+    status: toFirestoreString("in_progress"),
+    created_at: toFirestoreTimestamp(new Date()),
+    updated_at: toFirestoreTimestamp(new Date()),
+  });
+}
+
+async function publishEmergencyUpdate(token, session, fromPhone) {
   const now = new Date();
-  const tomorrow = new Date(now);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  tomorrow.setHours(18, 0, 0, 0);
-  return tomorrow;
+
+  await createFirestoreDocument(token, "emergency_updates", {
+    district_id: toFirestoreString(readField(session, "district_id")),
+    school_id: toFirestoreString(readField(session, "school_id")),
+    school_label: toFirestoreString(readField(session, "school_label")),
+    status: toFirestoreString("active"),
+    category: toFirestoreString(readField(session, "category")),
+    title: toFirestoreString(readField(session, "title")),
+    message: toFirestoreString(readField(session, "message")),
+    priority: toFirestoreString(readField(session, "priority")),
+    source: toFirestoreString("sms"),
+    created_by: toFirestoreString(readField(session, "staff_name")),
+    sender_phone: toFirestoreString(fromPhone),
+    active_from: toFirestoreTimestamp(now),
+    active_until: toFirestoreTimestamp(new Date(readField(session, "active_until"))),
+    created_at: toFirestoreTimestamp(now),
+    can_display: toFirestoreBoolean(true),
+  });
 }
 
 module.exports = async function handler(req, res) {
@@ -144,6 +313,7 @@ module.exports = async function handler(req, res) {
 
     const fromPhone = normalizePhone(body.From);
     const messageText = String(body.Body || "").trim();
+    const normalizedMessage = messageText.toUpperCase();
 
     const token = await getAccessToken();
 
@@ -178,50 +348,159 @@ module.exports = async function handler(req, res) {
         );
     }
 
-    const districtId = readField(senderDoc, "district_id");
-    const staffName = readField(senderDoc, "staff_name");
+    let sessionDoc = await firestoreRunQuery(
+      token,
+      "emergency_update_sessions",
+      "phone_number",
+      fromPhone
+    );
 
-    if (!messageText || messageText.toUpperCase() === "UPDATE") {
+    if (normalizedMessage === "CANCEL" || normalizedMessage === "NO") {
+      if (sessionDoc) {
+        await deleteFirestoreDocument(token, sessionDoc.name);
+      }
+
       res.setHeader("Content-Type", "text/xml");
-      return res.status(200).send(
-        twiml(
-          "AskMySchool Rapid Notice: reply with the emergency message you want parents to see. Example: School is canceled tomorrow due to severe weather."
-        )
-      );
+      return res.status(200).send(twiml("Rapid Notice canceled."));
     }
 
-    const now = new Date();
-    const activeUntil = getTomorrowAtSixPmEastern();
+    if (!sessionDoc || normalizedMessage === "UPDATE" || normalizedMessage === "START") {
+      if (sessionDoc) {
+        await deleteFirestoreDocument(token, sessionDoc.name);
+      }
 
-    await createFirestoreDocument(token, "emergency_updates", {
-      district_id: toFirestoreString(districtId),
-      school_id: toFirestoreString("districtwide"),
-      status: toFirestoreString("active"),
-      category: toFirestoreString("rapid_notice"),
-      title: toFirestoreString("Emergency Update"),
-      message: toFirestoreString(messageText),
-      priority: toFirestoreString("high"),
-      source: toFirestoreString("sms"),
-      created_by: toFirestoreString(staffName),
-      sender_phone: toFirestoreString(fromPhone),
-      active_from: toFirestoreTimestamp(now),
-      active_until: toFirestoreTimestamp(activeUntil),
-      created_at: toFirestoreTimestamp(now),
-      can_display: toFirestoreBoolean(true),
-    });
+      await createOrResetSession(token, senderDoc, fromPhone);
+
+      res.setHeader("Content-Type", "text/xml");
+      return res.status(200).send(twiml(startMessage()));
+    }
+
+    const step = readField(sessionDoc, "step");
+
+    if (step === "scope") {
+      const selectedSchool = SCHOOL_OPTIONS[messageText];
+
+      if (!selectedSchool) {
+        res.setHeader("Content-Type", "text/xml");
+        return res
+          .status(200)
+          .send(twiml("Please reply with 1, 2, 3, 4, or 5."));
+      }
+
+      await updateFirestoreDocument(token, sessionDoc.name, {
+        school_id: toFirestoreString(selectedSchool.school_id),
+        school_label: toFirestoreString(selectedSchool.label),
+        step: toFirestoreString("category"),
+        updated_at: toFirestoreTimestamp(new Date()),
+      });
+
+      res.setHeader("Content-Type", "text/xml");
+      return res.status(200).send(twiml(categoryMessage()));
+    }
+
+    if (step === "category") {
+      const selectedCategory = CATEGORY_OPTIONS[messageText];
+
+      if (!selectedCategory) {
+        res.setHeader("Content-Type", "text/xml");
+        return res
+          .status(200)
+          .send(twiml("Please reply with 1, 2, 3, 4, or 5."));
+      }
+
+      await updateFirestoreDocument(token, sessionDoc.name, {
+        category: toFirestoreString(selectedCategory.category),
+        title: toFirestoreString(selectedCategory.title),
+        priority: toFirestoreString(selectedCategory.priority),
+        step: toFirestoreString("message"),
+        updated_at: toFirestoreTimestamp(new Date()),
+      });
+
+      res.setHeader("Content-Type", "text/xml");
+      return res
+        .status(200)
+        .send(
+          twiml(
+            "What message should parents see? Example: School is canceled tomorrow due to severe weather."
+          )
+        );
+    }
+
+    if (step === "message") {
+      if (!messageText || messageText.length < 5) {
+        res.setHeader("Content-Type", "text/xml");
+        return res
+          .status(200)
+          .send(twiml("Please send the full message parents should see."));
+      }
+
+      await updateFirestoreDocument(token, sessionDoc.name, {
+        message: toFirestoreString(messageText),
+        step: toFirestoreString("expiration"),
+        updated_at: toFirestoreTimestamp(new Date()),
+      });
+
+      res.setHeader("Content-Type", "text/xml");
+      return res.status(200).send(twiml(expirationMessage()));
+    }
+
+    if (step === "expiration") {
+      if (!["1", "2", "3"].includes(messageText)) {
+        res.setHeader("Content-Type", "text/xml");
+        return res.status(200).send(twiml("Please reply with 1, 2, or 3."));
+      }
+
+      const activeUntil = getExpiration(messageText);
+
+      await updateFirestoreDocument(token, sessionDoc.name, {
+        active_until: toFirestoreTimestamp(activeUntil),
+        expiration_choice: toFirestoreInteger(messageText),
+        step: toFirestoreString("confirm"),
+        updated_at: toFirestoreTimestamp(new Date()),
+      });
+
+      const updatedSession = await firestoreRunQuery(
+        token,
+        "emergency_update_sessions",
+        "phone_number",
+        fromPhone
+      );
+
+      res.setHeader("Content-Type", "text/xml");
+      return res.status(200).send(twiml(confirmMessage(updatedSession)));
+    }
+
+    if (step === "confirm") {
+      if (normalizedMessage !== "YES") {
+        res.setHeader("Content-Type", "text/xml");
+        return res.status(200).send(twiml("Reply YES to publish or NO to cancel."));
+      }
+
+      await publishEmergencyUpdate(token, sessionDoc, fromPhone);
+      await deleteFirestoreDocument(token, sessionDoc.name);
+
+      res.setHeader("Content-Type", "text/xml");
+      return res
+        .status(200)
+        .send(
+          twiml(
+            "Update published. AskMySchool will show this notice while it is active."
+          )
+        );
+    }
+
+    await deleteFirestoreDocument(token, sessionDoc.name);
 
     res.setHeader("Content-Type", "text/xml");
-    return res.status(200).send(
-      twiml(
-        "Update submitted. AskMySchool will now show this notice while it is active."
-      )
-    );
+    return res
+      .status(200)
+      .send(twiml("Something got out of sync. Text UPDATE to start over."));
   } catch (error) {
     console.error("Twilio webhook error:", error);
 
     res.setHeader("Content-Type", "text/xml");
     return res
       .status(200)
-      .send(twiml("AskMySchool could not save that update. Please try again."));
+      .send(twiml("AskMySchool could not process that update. Please try again."));
   }
 };
