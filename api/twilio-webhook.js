@@ -2,6 +2,7 @@ const { GoogleAuth } = require("google-auth-library");
 
 const PROJECT_ID = "pinevera-askmyschool";
 const FIRESTORE_DATABASE = "%28default%29";
+const EASTERN_TIME_ZONE = "America/New_York";
 
 const SCHOOL_OPTIONS = {
   "1": { school_id: "districtwide", label: "Districtwide" },
@@ -190,33 +191,78 @@ function readField(document, fieldName) {
   );
 }
 
+function getEasternParts(date = new Date()) {
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: EASTERN_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+
+  const parts = formatter.formatToParts(date);
+  const partMap = {};
+
+  for (const part of parts) {
+    partMap[part.type] = part.value;
+  }
+
+  return {
+    year: Number(partMap.year),
+    month: Number(partMap.month),
+    day: Number(partMap.day),
+  };
+}
+
+function getEasternOffsetForDate(year, month, day) {
+  const noonUtc = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: EASTERN_TIME_ZONE,
+    timeZoneName: "short",
+  });
+
+  const timeZoneName =
+    formatter
+      .formatToParts(noonUtc)
+      .find((part) => part.type === "timeZoneName")?.value || "EST";
+
+  return timeZoneName === "EDT" ? "-04:00" : "-05:00";
+}
+
+function makeEasternDateAt(hour, dayOffset = 0) {
+  const easternToday = getEasternParts();
+  const targetDate = new Date(
+    Date.UTC(easternToday.year, easternToday.month - 1, easternToday.day)
+  );
+
+  targetDate.setUTCDate(targetDate.getUTCDate() + dayOffset);
+
+  const year = targetDate.getUTCFullYear();
+  const month = targetDate.getUTCMonth() + 1;
+  const day = targetDate.getUTCDate();
+
+  const offset = getEasternOffsetForDate(year, month, day);
+
+  const yyyy = String(year).padStart(4, "0");
+  const mm = String(month).padStart(2, "0");
+  const dd = String(day).padStart(2, "0");
+  const hh = String(hour).padStart(2, "0");
+
+  return new Date(`${yyyy}-${mm}-${dd}T${hh}:00:00${offset}`);
+}
+
 function addHours(hours) {
   const date = new Date();
   date.setHours(date.getHours() + hours);
   return date;
 }
 
-function easternDateAt(hour, dayOffset = 0) {
-  const now = new Date();
-
-  const easternNow = new Date(
-    now.toLocaleString("en-US", {
-      timeZone: "America/New_York",
-    })
-  );
-
-  easternNow.setDate(easternNow.getDate() + dayOffset);
-  easternNow.setHours(hour, 0, 0, 0);
-
-  return easternNow;
-}
-
 function endOfSchoolDay() {
-  return easternDateAt(18, 0);
+  return makeEasternDateAt(18, 0);
 }
 
 function tomorrowAtSixPm() {
-  return easternDateAt(18, 1);
+  return makeEasternDateAt(18, 1);
 }
 
 function getExpiration(option) {
@@ -236,7 +282,7 @@ function formatTimestampForText(value) {
   }
 
   return date.toLocaleString("en-US", {
-    timeZone: "America/New_York",
+    timeZone: EASTERN_TIME_ZONE,
     month: "short",
     day: "numeric",
     year: "numeric",
