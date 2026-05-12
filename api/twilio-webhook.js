@@ -1,6 +1,6 @@
 const { GoogleAuth } = require("google-auth-library");
 
-const PROJECT_ID = "346318948573";
+const PROJECT_ID = "pinevera-askmyschool";
 const FIRESTORE_DATABASE = "%28default%29";
 
 async function getAccessToken() {
