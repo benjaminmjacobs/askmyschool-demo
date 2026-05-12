@@ -4,6 +4,12 @@ const PROJECT_ID = "346318948573";
 const LOCATION = "us-west1";
 const REASONING_ENGINE_ID = "3262585251146235904";
 
+const EMERGENCY_UPDATES_URL =
+  "https://script.google.com/macros/s/AKfycbzYg8OExvAIzsIfjxcmmViuF8AXYhVRQb12fT3tRAq-wsHjFOxwWDNbPj5ZqJtYADgy/exec";
+
+const DEFAULT_DISTRICT_ID = "ben_hill_ga";
+const DEFAULT_SCHOOL_ID = "districtwide";
+
 const BASE_URL =
   `https://${LOCATION}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/${LOCATION}/reasoningEngines/${REASONING_ENGINE_ID}`;
 
@@ -66,6 +72,105 @@ async function createSession(token, userId) {
   return sessionName.split("/").pop();
 }
 
+async function getEmergencyUpdates(districtId, schoolId) {
+  const url =
+    `${EMERGENCY_UPDATES_URL}` +
+    `?district_id=${encodeURIComponent(districtId)}` +
+    `&school_id=${encodeURIComponent(schoolId)}` +
+    `&format=json`;
+
+  try {
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+      },
+    });
+
+    const text = await response.text();
+
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      return {
+        status: "error",
+        has_active_notice: false,
+        match_count: 0,
+        updates: [],
+        error: `Emergency update response was not JSON: ${text}`,
+      };
+    }
+
+    if (!response.ok) {
+      return {
+        status: "error",
+        has_active_notice: false,
+        match_count: 0,
+        updates: [],
+        error: JSON.stringify(data),
+      };
+    }
+
+    return data;
+  } catch (error) {
+    return {
+      status: "error",
+      has_active_notice: false,
+      match_count: 0,
+      updates: [],
+      error: error.message || "Emergency update check failed",
+    };
+  }
+}
+
+function buildEmergencyContext(emergencyData) {
+  const updates = Array.isArray(emergencyData?.updates)
+    ? emergencyData.updates
+    : [];
+
+  if (!emergencyData?.has_active_notice || updates.length === 0) {
+    return "";
+  }
+
+  const updateBlocks = updates
+    .map((update, index) => {
+      return [
+        `ACTIVE_NOTICE_${index + 1}:`,
+        `Title: ${update.title || ""}`,
+        `Message: ${update.message || ""}`,
+        `District: ${update.district_name || ""}`,
+        `District ID: ${update.district_id || ""}`,
+        `School ID: ${update.school_id || ""}`,
+        `School Scope: ${update.school_scope || ""}`,
+        `Category: ${update.category || ""}`,
+        `Event Date: ${update.event_date || ""}`,
+        `Active From: ${update.active_from || ""}`,
+        `Active Until: ${update.active_until || ""}`,
+        `Priority: ${update.priority || ""}`,
+        `Audience: ${update.audience || ""}`,
+        `Keywords: ${update.keywords || ""}`,
+      ].join("\n");
+    })
+    .join("\n\n");
+
+  return `
+[ACTIVE_EMERGENCY_OR_SCHOOL_NOTICE_CONTEXT]
+There is one or more active district or school notices.
+
+Rules:
+1. Treat this notice as official district/school information.
+2. If this is the first response in the session, mention the active notice before answering the user's question.
+3. For later responses, do not repeat the notice unless it is relevant to the user's question.
+4. If the user asks about the affected date, school, event, bus route, lunch, activity, or topic, apply the notice logically.
+5. If the user's question is unrelated to the notice, answer normally.
+6. Do not say the notice came from a spreadsheet, Apps Script, Vercel, or internal system.
+
+${updateBlocks}
+[/ACTIVE_EMERGENCY_OR_SCHOOL_NOTICE_CONTEXT]
+`.trim();
+}
+
 function parseStreamResponse(text) {
   const lines = text
     .split("\n")
@@ -101,9 +206,18 @@ function parseStreamResponse(text) {
   };
 }
 
-async function sendMessage(token, userId, sessionId, message) {
-  const messageWithDate =
-    `[current_date: ${getCurrentDateForAgent()}]\n\n${message}`;
+async function sendMessage(token, userId, sessionId, message, emergencyData) {
+  const emergencyContext = buildEmergencyContext(emergencyData);
+
+  const messageWithContext = [
+    `[current_date: ${getCurrentDateForAgent()}]`,
+    emergencyContext,
+    `[USER_MESSAGE]`,
+    message,
+    `[/USER_MESSAGE]`,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 
   const response = await fetch(`${BASE_URL}:streamQuery`, {
     method: "POST",
@@ -115,7 +229,7 @@ async function sendMessage(token, userId, sessionId, message) {
       input: {
         user_id: userId,
         session_id: sessionId,
-        message: messageWithDate,
+        message: messageWithContext,
       },
     }),
   });
@@ -137,7 +251,13 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    const { message, sessionId, userId } = req.body || {};
+    const {
+      message,
+      sessionId,
+      userId,
+      districtId,
+      schoolId,
+    } = req.body || {};
 
     if (!message || typeof message !== "string") {
       return res.status(400).json({
@@ -147,6 +267,9 @@ module.exports = async function handler(req, res) {
     }
 
     const resolvedUserId = userId || "demo-user";
+    const resolvedDistrictId = districtId || DEFAULT_DISTRICT_ID;
+    const resolvedSchoolId = schoolId || DEFAULT_SCHOOL_ID;
+
     const token = await getAccessToken();
 
     let resolvedSessionId = sessionId;
@@ -155,11 +278,17 @@ module.exports = async function handler(req, res) {
       resolvedSessionId = await createSession(token, resolvedUserId);
     }
 
+    const emergencyData = await getEmergencyUpdates(
+      resolvedDistrictId,
+      resolvedSchoolId
+    );
+
     const data = await sendMessage(
       token,
       resolvedUserId,
       resolvedSessionId,
-      message
+      message,
+      emergencyData
     );
 
     return res.status(200).json({
@@ -167,6 +296,15 @@ module.exports = async function handler(req, res) {
       raw: data.raw,
       sessionId: resolvedSessionId,
       userId: resolvedUserId,
+      districtId: resolvedDistrictId,
+      schoolId: resolvedSchoolId,
+      emergency: {
+        status: emergencyData.status || "unknown",
+        has_active_notice: Boolean(emergencyData.has_active_notice),
+        match_count: emergencyData.match_count || 0,
+        updates: emergencyData.updates || [],
+        error: emergencyData.error || null,
+      },
     });
   } catch (error) {
     console.error("AskMySchool API error:", error);
