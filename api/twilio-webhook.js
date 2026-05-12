@@ -196,17 +196,27 @@ function addHours(hours) {
   return date;
 }
 
+function easternDateAt(hour, dayOffset = 0) {
+  const now = new Date();
+
+  const easternNow = new Date(
+    now.toLocaleString("en-US", {
+      timeZone: "America/New_York",
+    })
+  );
+
+  easternNow.setDate(easternNow.getDate() + dayOffset);
+  easternNow.setHours(hour, 0, 0, 0);
+
+  return easternNow;
+}
+
 function endOfSchoolDay() {
-  const date = new Date();
-  date.setHours(18, 0, 0, 0);
-  return date;
+  return easternDateAt(18, 0);
 }
 
 function tomorrowAtSixPm() {
-  const date = new Date();
-  date.setDate(date.getDate() + 1);
-  date.setHours(18, 0, 0, 0);
-  return date;
+  return easternDateAt(18, 1);
 }
 
 function getExpiration(option) {
@@ -214,6 +224,26 @@ function getExpiration(option) {
   if (option === "2") return endOfSchoolDay();
   if (option === "3") return tomorrowAtSixPm();
   return tomorrowAtSixPm();
+}
+
+function formatTimestampForText(value) {
+  if (!value) return "Not set";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return String(value);
+  }
+
+  return date.toLocaleString("en-US", {
+    timeZone: "America/New_York",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+  });
 }
 
 function startMessage() {
@@ -232,10 +262,10 @@ function startMessage() {
 function categoryMessage() {
   return (
     "What type of update is this?\n" +
-    "1 Closure\n" +
-    "2 Delay\n" +
-    "3 Bus delay\n" +
-    "4 Event change\n" +
+    "1 School Closure\n" +
+    "2 School Delay\n" +
+    "3 Bus Delay\n" +
+    "4 Event Change\n" +
     "5 Other\n\n" +
     "Reply with a number."
   );
@@ -255,12 +285,14 @@ function confirmMessage(session) {
   const schoolLabel = readField(session, "school_label");
   const title = readField(session, "title");
   const message = readField(session, "message");
+  const activeUntil = readField(session, "active_until");
 
   return (
     "Review this update:\n\n" +
     `Scope: ${schoolLabel}\n` +
     `Type: ${title}\n` +
-    `Message: ${message}\n\n` +
+    `Message: ${message}\n` +
+    `Expires: ${formatTimestampForText(activeUntil)}\n\n` +
     "Reply YES to publish or NO to cancel."
   );
 }
@@ -282,6 +314,8 @@ async function createOrResetSession(token, senderDoc, fromPhone) {
 
 async function publishEmergencyUpdate(token, session, fromPhone) {
   const now = new Date();
+  const activeUntilValue = readField(session, "active_until");
+  const activeUntil = new Date(activeUntilValue);
 
   await createFirestoreDocument(token, "emergency_updates", {
     district_id: toFirestoreString(readField(session, "district_id")),
@@ -296,7 +330,7 @@ async function publishEmergencyUpdate(token, session, fromPhone) {
     created_by: toFirestoreString(readField(session, "staff_name")),
     sender_phone: toFirestoreString(fromPhone),
     active_from: toFirestoreTimestamp(now),
-    active_until: toFirestoreTimestamp(new Date(readField(session, "active_until"))),
+    active_until: toFirestoreTimestamp(activeUntil),
     created_at: toFirestoreTimestamp(now),
     can_display: toFirestoreBoolean(true),
   });
@@ -364,7 +398,11 @@ module.exports = async function handler(req, res) {
       return res.status(200).send(twiml("Rapid Notice canceled."));
     }
 
-    if (!sessionDoc || normalizedMessage === "UPDATE" || normalizedMessage === "START") {
+    if (
+      !sessionDoc ||
+      normalizedMessage === "UPDATE" ||
+      normalizedMessage === "START"
+    ) {
       if (sessionDoc) {
         await deleteFirestoreDocument(token, sessionDoc.name);
       }
@@ -473,7 +511,9 @@ module.exports = async function handler(req, res) {
     if (step === "confirm") {
       if (normalizedMessage !== "YES") {
         res.setHeader("Content-Type", "text/xml");
-        return res.status(200).send(twiml("Reply YES to publish or NO to cancel."));
+        return res
+          .status(200)
+          .send(twiml("Reply YES to publish or NO to cancel."));
       }
 
       await publishEmergencyUpdate(token, sessionDoc, fromPhone);
@@ -501,6 +541,8 @@ module.exports = async function handler(req, res) {
     res.setHeader("Content-Type", "text/xml");
     return res
       .status(200)
-      .send(twiml("AskMySchool could not process that update. Please try again."));
+      .send(
+        twiml("AskMySchool could not process that update. Please try again.")
+      );
   }
 };
