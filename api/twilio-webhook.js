@@ -1,7 +1,7 @@
 const { GoogleAuth } = require("google-auth-library");
 
 const PROJECT_ID = "346318948573";
-const FIRESTORE_DATABASE = "(default)";
+const FIRESTORE_DATABASE = "%28default%29";
 
 async function getAccessToken() {
   const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
