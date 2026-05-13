@@ -603,7 +603,7 @@
     let askMySchoolUserId = "demo-user";
 
     const SCHOOL_STORAGE_KEY = "askmyschool_selected_schools";
-    const DISPLAYED_NOTICE_STORAGE_KEY = "askmyschool_displayed_notice_ids";
+    const displayedNoticeIds = [];
 
     const input = document.getElementById("input");
     const messages = document.getElementById("messages");
@@ -777,29 +777,6 @@
       return row;
     }
 
-    function getDisplayedNoticeIds() {
-      try {
-        const stored = localStorage.getItem(DISPLAYED_NOTICE_STORAGE_KEY);
-
-        if (!stored) {
-          return [];
-        }
-
-        const parsed = JSON.parse(stored);
-
-        return Array.isArray(parsed) ? parsed : [];
-      } catch {
-        return [];
-      }
-    }
-
-    function saveDisplayedNoticeIds(noticeIds) {
-      localStorage.setItem(
-        DISPLAYED_NOTICE_STORAGE_KEY,
-        JSON.stringify(noticeIds)
-      );
-    }
-
     function getNoticeIdentity(update) {
       return [
         update.update_id || "",
@@ -815,8 +792,6 @@
         return [];
       }
 
-      const displayedNoticeIds = getDisplayedNoticeIds();
-      const nextDisplayedNoticeIds = [...displayedNoticeIds];
       const displayedNow = [];
 
       updates.forEach((update) => {
@@ -850,11 +825,9 @@
           html: true
         });
 
-        nextDisplayedNoticeIds.push(noticeId);
+        displayedNoticeIds.push(noticeId);
         displayedNow.push(update);
       });
-
-      saveDisplayedNoticeIds(nextDisplayedNoticeIds);
 
       return displayedNow;
     }
