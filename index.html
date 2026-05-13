@@ -115,6 +115,64 @@
       box-shadow: 0 0 0 4px rgba(47, 166, 106, 0.12);
     }
 
+    .school-selector {
+      margin-top: 14px;
+      padding: 13px;
+      border: 1px solid rgba(10, 109, 128, 0.14);
+      background: rgba(255, 255, 255, 0.72);
+      border-radius: 20px;
+    }
+
+    .school-selector-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 9px;
+    }
+
+    .school-selector-title {
+      color: var(--evergreen);
+      font-size: 13px;
+      font-weight: 900;
+    }
+
+    .school-selector-note {
+      color: rgba(43, 47, 50, 0.56);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .school-options {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .school-chip {
+      border: 1px solid rgba(10, 109, 128, 0.18);
+      background: var(--white);
+      color: var(--evergreen);
+      border-radius: 999px;
+      padding: 8px 11px;
+      font-size: 12px;
+      font-weight: 850;
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+    }
+
+    .school-chip:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 18px rgba(10, 109, 128, 0.12);
+    }
+
+    .school-chip.selected {
+      background: var(--teal);
+      color: white;
+      border-color: var(--teal);
+      box-shadow: 0 8px 18px rgba(10, 109, 128, 0.18);
+    }
+
     .quick-prompts {
       display: flex;
       gap: 8px;
@@ -371,6 +429,39 @@
           <span class="status-dot"></span>
           Ben Hill County Schools Demo
         </div>
+
+        <div class="school-selector" aria-label="School selection">
+          <div class="school-selector-top">
+            <div class="school-selector-title">My Schools</div>
+            <div class="school-selector-note">Used for alerts and school-specific answers</div>
+          </div>
+
+          <div class="school-options">
+            <button class="school-chip selected" data-school="districtwide" onclick="toggleSchoolSelection('districtwide')">
+              Districtwide
+            </button>
+
+            <button class="school-chip" data-school="ben_hill_primary" onclick="toggleSchoolSelection('ben_hill_primary')">
+              Primary
+            </button>
+
+            <button class="school-chip" data-school="ben_hill_elementary" onclick="toggleSchoolSelection('ben_hill_elementary')">
+              Elementary
+            </button>
+
+            <button class="school-chip" data-school="ben_hill_middle" onclick="toggleSchoolSelection('ben_hill_middle')">
+              Middle
+            </button>
+
+            <button class="school-chip" data-school="fitzgerald_high" onclick="toggleSchoolSelection('fitzgerald_high')">
+              High School
+            </button>
+
+            <button class="school-chip" data-school="ben_hill_prek" onclick="toggleSchoolSelection('ben_hill_prek')">
+              Pre-K
+            </button>
+          </div>
+        </div>
       </header>
 
       <div class="quick-prompts" aria-label="Suggested questions">
@@ -406,13 +497,90 @@
     let askMySchoolSessionId = null;
     let askMySchoolUserId = "demo-user";
 
+    const DEFAULT_SELECTED_SCHOOLS = ["districtwide"];
+    const SCHOOL_STORAGE_KEY = "askmyschool_selected_schools";
+
     const input = document.getElementById("input");
     const messages = document.getElementById("messages");
     const button = document.getElementById("sendButton");
 
+    function getSelectedSchoolIds() {
+      try {
+        const stored = localStorage.getItem(SCHOOL_STORAGE_KEY);
+        const parsed = stored ? JSON.parse(stored) : null;
+
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      } catch (error) {
+        console.warn("Could not read selected schools:", error);
+      }
+
+      return DEFAULT_SELECTED_SCHOOLS;
+    }
+
+    function saveSelectedSchoolIds(selectedSchoolIds) {
+      localStorage.setItem(SCHOOL_STORAGE_KEY, JSON.stringify(selectedSchoolIds));
+    }
+
+    function getPrimarySchoolId() {
+      const selected = getSelectedSchoolIds();
+
+      const nonDistrictwide = selected.find((schoolId) => schoolId !== "districtwide");
+
+      return nonDistrictwide || "districtwide";
+    }
+
+    function toggleSchoolSelection(schoolId) {
+      let selected = getSelectedSchoolIds();
+
+      if (schoolId === "districtwide") {
+        if (selected.includes("districtwide") && selected.length === 1) {
+          selected = ["districtwide"];
+        } else if (selected.includes("districtwide")) {
+          selected = selected.filter((id) => id !== "districtwide");
+        } else {
+          selected.push("districtwide");
+        }
+      } else {
+        if (selected.includes(schoolId)) {
+          selected = selected.filter((id) => id !== schoolId);
+        } else {
+          selected.push(schoolId);
+        }
+      }
+
+      if (selected.length === 0) {
+        selected = ["districtwide"];
+      }
+
+      if (!selected.includes("districtwide")) {
+        selected.unshift("districtwide");
+      }
+
+      saveSelectedSchoolIds(selected);
+      updateSchoolChipUI();
+    }
+
+    function updateSchoolChipUI() {
+      const selected = getSelectedSchoolIds();
+      const chips = document.querySelectorAll(".school-chip");
+
+      chips.forEach((chip) => {
+        const schoolId = chip.getAttribute("data-school");
+
+        if (selected.includes(schoolId)) {
+          chip.classList.add("selected");
+        } else {
+          chip.classList.remove("selected");
+        }
+      });
+    }
+
     function usePrompt(text) {
       input.value = text;
       input.focus();
+      autoResizeInput();
     }
 
     function addUserMessage(text) {
@@ -485,6 +653,8 @@
       const text = input.value.trim();
       if (!text) return;
 
+      const selectedSchoolIds = getSelectedSchoolIds();
+
       addUserMessage(text);
       input.value = "";
       autoResizeInput();
@@ -499,7 +669,10 @@
           body: JSON.stringify({
             message: text,
             sessionId: askMySchoolSessionId,
-            userId: askMySchoolUserId
+            userId: askMySchoolUserId,
+            schoolId: getPrimarySchoolId(),
+            selectedSchoolIds: selectedSchoolIds,
+            channel: "web"
           })
         });
 
@@ -570,6 +743,8 @@
         sendMessage();
       }
     });
+
+    updateSchoolChipUI();
   </script>
 </body>
 </html>
