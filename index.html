@@ -31,7 +31,9 @@
       --shadow: 0 18px 55px rgba(19, 77, 69, 0.16);
     }
 
-    * { box-sizing: border-box; }
+    * {
+      box-sizing: border-box;
+    }
 
     html, body {
       margin: 0;
@@ -117,60 +119,96 @@
 
     .school-selector {
       margin-top: 14px;
-      padding: 13px;
-      border: 1px solid rgba(10, 109, 128, 0.14);
-      background: rgba(255, 255, 255, 0.72);
-      border-radius: 20px;
+      position: relative;
     }
 
-    .school-selector-top {
+    .school-selector-button {
+      width: 100%;
+      border: 1px solid rgba(10, 109, 128, 0.16);
+      background: rgba(255,255,255,0.82);
+      border-radius: 18px;
+      padding: 13px 15px;
+      cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 10px;
-      margin-bottom: 9px;
+      gap: 12px;
+      transition: all 0.15s ease;
+    }
+
+    .school-selector-button:hover {
+      box-shadow: 0 8px 20px rgba(10,109,128,0.10);
+      transform: translateY(-1px);
+    }
+
+    .school-selector-left {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 3px;
     }
 
     .school-selector-title {
-      color: var(--evergreen);
       font-size: 13px;
       font-weight: 900;
+      color: var(--evergreen);
     }
 
-    .school-selector-note {
-      color: rgba(43, 47, 50, 0.56);
+    .school-selector-subtitle {
       font-size: 11px;
+      color: rgba(43,47,50,0.58);
       font-weight: 700;
     }
 
-    .school-options {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-
-    .school-chip {
-      border: 1px solid rgba(10, 109, 128, 0.18);
-      background: var(--white);
+    .school-selector-arrow {
       color: var(--evergreen);
-      border-radius: 999px;
-      padding: 8px 11px;
-      font-size: 12px;
-      font-weight: 850;
+      font-size: 14px;
+      font-weight: 900;
+    }
+
+    .school-dropdown {
+      position: absolute;
+      top: calc(100% + 8px);
+      left: 0;
+      right: 0;
+      background: white;
+      border: 1px solid rgba(10,109,128,0.12);
+      border-radius: 20px;
+      box-shadow: 0 18px 45px rgba(19,77,69,0.16);
+      padding: 10px;
+      display: none;
+      z-index: 50;
+    }
+
+    .school-dropdown.open {
+      display: block;
+    }
+
+    .school-option {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      border-radius: 14px;
       cursor: pointer;
-      transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+      transition: background 0.15s ease;
     }
 
-    .school-chip:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 6px 18px rgba(10, 109, 128, 0.12);
+    .school-option:hover {
+      background: rgba(10,109,128,0.06);
     }
 
-    .school-chip.selected {
-      background: var(--teal);
-      color: white;
-      border-color: var(--teal);
-      box-shadow: 0 8px 18px rgba(10, 109, 128, 0.18);
+    .school-option input {
+      width: 18px;
+      height: 18px;
+      accent-color: var(--teal);
+      cursor: pointer;
+    }
+
+    .school-option-label {
+      font-size: 14px;
+      font-weight: 750;
+      color: var(--charcoal);
     }
 
     .quick-prompts {
@@ -183,7 +221,9 @@
       scrollbar-width: none;
     }
 
-    .quick-prompts::-webkit-scrollbar { display: none; }
+    .quick-prompts::-webkit-scrollbar {
+      display: none;
+    }
 
     .chip {
       flex: 0 0 auto;
@@ -241,7 +281,9 @@
       align-items: flex-end;
     }
 
-    .message-row.user { justify-content: flex-end; }
+    .message-row.user {
+      justify-content: flex-end;
+    }
 
     .avatar {
       width: 34px;
@@ -293,7 +335,9 @@
       border-bottom-right-radius: 7px;
     }
 
-    .bubble strong { color: var(--evergreen); }
+    .bubble strong {
+      color: var(--evergreen);
+    }
 
     .notice {
       border-left: 5px solid var(--coral) !important;
@@ -315,12 +359,24 @@
       animation: bounce 1s infinite ease-in-out;
     }
 
-    .typing span:nth-child(2) { animation-delay: 0.16s; }
-    .typing span:nth-child(3) { animation-delay: 0.32s; }
+    .typing span:nth-child(2) {
+      animation-delay: 0.16s;
+    }
+
+    .typing span:nth-child(3) {
+      animation-delay: 0.32s;
+    }
 
     @keyframes bounce {
-      0%, 80%, 100% { transform: translateY(0); opacity: 0.45; }
-      40% { transform: translateY(-5px); opacity: 1; }
+      0%, 80%, 100% {
+        transform: translateY(0);
+        opacity: 0.45;
+      }
+
+      40% {
+        transform: translateY(-5px);
+        opacity: 1;
+      }
     }
 
     .composer {
@@ -354,7 +410,9 @@
       padding: 5px 4px;
     }
 
-    textarea::placeholder { color: rgba(43, 47, 50, 0.45); }
+    textarea::placeholder {
+      color: rgba(43, 47, 50, 0.45);
+    }
 
     button.send {
       width: 48px;
@@ -371,7 +429,9 @@
       transition: transform 0.15s ease, opacity 0.15s ease;
     }
 
-    button.send:hover { transform: translateY(-1px); }
+    button.send:hover {
+      transform: translateY(-1px);
+    }
 
     button.send:disabled {
       opacity: 0.55;
@@ -416,7 +476,7 @@
 
 <body>
   <main class="page">
-    <section class="app-shell" aria-label="AskMySchool chat application">
+    <section class="app-shell">
       <header class="app-header">
         <div class="brand-row">
           <div class="brand-text">
@@ -430,51 +490,77 @@
           Ben Hill County Schools Demo
         </div>
 
-        <div class="school-selector" aria-label="School selection">
-          <div class="school-selector-top">
-            <div class="school-selector-title">My Schools</div>
-            <div class="school-selector-note">Used for alerts and school-specific answers</div>
-          </div>
+        <div class="school-selector">
+          <button class="school-selector-button" onclick="toggleSchoolDropdown()">
+            <div class="school-selector-left">
+              <div class="school-selector-title">
+                Follow school alerts
+              </div>
 
-          <div class="school-options">
-            <button class="school-chip selected" data-school="districtwide" onclick="toggleSchoolSelection('districtwide')">
-              Districtwide
-            </button>
+              <div class="school-selector-subtitle" id="schoolSelectorSummary">
+                Select schools
+              </div>
+            </div>
 
-            <button class="school-chip" data-school="ben_hill_primary" onclick="toggleSchoolSelection('ben_hill_primary')">
-              Primary
-            </button>
+            <div class="school-selector-arrow">
+              ▼
+            </div>
+          </button>
 
-            <button class="school-chip" data-school="ben_hill_elementary" onclick="toggleSchoolSelection('ben_hill_elementary')">
-              Elementary
-            </button>
+          <div class="school-dropdown" id="schoolDropdown">
+            <label class="school-option">
+              <input type="checkbox" value="ben_hill_primary" onchange="handleSchoolSelection()" />
+              <span class="school-option-label">Ben Hill Primary School</span>
+            </label>
 
-            <button class="school-chip" data-school="ben_hill_middle" onclick="toggleSchoolSelection('ben_hill_middle')">
-              Middle
-            </button>
+            <label class="school-option">
+              <input type="checkbox" value="ben_hill_elementary" onchange="handleSchoolSelection()" />
+              <span class="school-option-label">Ben Hill Elementary School</span>
+            </label>
 
-            <button class="school-chip" data-school="fitzgerald_high" onclick="toggleSchoolSelection('fitzgerald_high')">
-              High School
-            </button>
+            <label class="school-option">
+              <input type="checkbox" value="ben_hill_middle" onchange="handleSchoolSelection()" />
+              <span class="school-option-label">Ben Hill Middle School</span>
+            </label>
 
-            <button class="school-chip" data-school="ben_hill_prek" onclick="toggleSchoolSelection('ben_hill_prek')">
-              Pre-K
-            </button>
+            <label class="school-option">
+              <input type="checkbox" value="fitzgerald_high" onchange="handleSchoolSelection()" />
+              <span class="school-option-label">Fitzgerald High School</span>
+            </label>
+
+            <label class="school-option">
+              <input type="checkbox" value="ben_hill_prek" onchange="handleSchoolSelection()" />
+              <span class="school-option-label">Ben Hill Pre-K</span>
+            </label>
           </div>
         </div>
       </header>
 
-      <div class="quick-prompts" aria-label="Suggested questions">
-        <button class="chip" onclick="usePrompt('What is for lunch tomorrow at the primary school?')">Lunch tomorrow</button>
-        <button class="chip" onclick="usePrompt('Is there school tomorrow?')">School tomorrow?</button>
-        <button class="chip" onclick="usePrompt('When is graduation this year?')">Graduation</button>
-        <button class="chip" onclick="usePrompt('What time does school start?')">Start times</button>
+      <div class="quick-prompts">
+        <button class="chip" onclick="usePrompt('What is for lunch tomorrow at the primary school?')">
+          Lunch tomorrow
+        </button>
+
+        <button class="chip" onclick="usePrompt('Is there school tomorrow?')">
+          School tomorrow?
+        </button>
+
+        <button class="chip" onclick="usePrompt('When is graduation this year?')">
+          Graduation
+        </button>
+
+        <button class="chip" onclick="usePrompt('What time does school start?')">
+          Start times
+        </button>
       </div>
 
-      <section id="messages" class="messages" aria-live="polite">
+      <section id="messages" class="messages">
         <div class="welcome-card">
           <h2>What do you need to know?</h2>
-          <p>Ask about menus, calendars, school events, closures, policies, or district information.</p>
+
+          <p>
+            Ask about menus, calendars, school events, closures, policies, or district information.
+          </p>
         </div>
       </section>
 
@@ -484,11 +570,16 @@
             id="input"
             placeholder="Ask a school question..."
             rows="1"
-            aria-label="Ask a school question"
           ></textarea>
-          <button id="sendButton" class="send" onclick="sendMessage()" aria-label="Send message">➤</button>
+
+          <button id="sendButton" class="send" onclick="sendMessage()">
+            ➤
+          </button>
         </div>
-        <div class="fine-print">Answers are based on available district documents and active updates.</div>
+
+        <div class="fine-print">
+          Answers are based on available district documents and active updates.
+        </div>
       </footer>
     </section>
   </main>
@@ -497,7 +588,6 @@
     let askMySchoolSessionId = null;
     let askMySchoolUserId = "demo-user";
 
-    const DEFAULT_SELECTED_SCHOOLS = ["districtwide"];
     const SCHOOL_STORAGE_KEY = "askmyschool_selected_schools";
 
     const input = document.getElementById("input");
@@ -507,80 +597,94 @@
     function getSelectedSchoolIds() {
       try {
         const stored = localStorage.getItem(SCHOOL_STORAGE_KEY);
-        const parsed = stored ? JSON.parse(stored) : null;
 
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+        if (!stored) {
+          return [];
         }
-      } catch (error) {
-        console.warn("Could not read selected schools:", error);
-      }
 
-      return DEFAULT_SELECTED_SCHOOLS;
+        const parsed = JSON.parse(stored);
+
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
     }
 
     function saveSelectedSchoolIds(selectedSchoolIds) {
-      localStorage.setItem(SCHOOL_STORAGE_KEY, JSON.stringify(selectedSchoolIds));
+      localStorage.setItem(
+        SCHOOL_STORAGE_KEY,
+        JSON.stringify(selectedSchoolIds)
+      );
     }
 
-    function getPrimarySchoolId() {
+    function updateSchoolSummary() {
       const selected = getSelectedSchoolIds();
-
-      const nonDistrictwide = selected.find((schoolId) => schoolId !== "districtwide");
-
-      return nonDistrictwide || "districtwide";
-    }
-
-    function toggleSchoolSelection(schoolId) {
-      let selected = getSelectedSchoolIds();
-
-      if (schoolId === "districtwide") {
-        if (selected.includes("districtwide") && selected.length === 1) {
-          selected = ["districtwide"];
-        } else if (selected.includes("districtwide")) {
-          selected = selected.filter((id) => id !== "districtwide");
-        } else {
-          selected.push("districtwide");
-        }
-      } else {
-        if (selected.includes(schoolId)) {
-          selected = selected.filter((id) => id !== schoolId);
-        } else {
-          selected.push(schoolId);
-        }
-      }
+      const summary = document.getElementById("schoolSelectorSummary");
 
       if (selected.length === 0) {
-        selected = ["districtwide"];
+        summary.textContent =
+          "Select schools for school-specific alerts";
+        return;
       }
 
-      if (!selected.includes("districtwide")) {
-        selected.unshift("districtwide");
+      if (selected.length === 1) {
+        const label = getSchoolDisplayName(selected[0]);
+        summary.textContent = label;
+        return;
       }
 
-      saveSelectedSchoolIds(selected);
-      updateSchoolChipUI();
+      summary.textContent =
+        `${selected.length} schools selected`;
     }
 
-    function updateSchoolChipUI() {
+    function getSchoolDisplayName(schoolId) {
+      const labels = {
+        ben_hill_primary: "Ben Hill Primary School",
+        ben_hill_elementary: "Ben Hill Elementary School",
+        ben_hill_middle: "Ben Hill Middle School",
+        fitzgerald_high: "Fitzgerald High School",
+        ben_hill_prek: "Ben Hill Pre-K"
+      };
+
+      return labels[schoolId] || schoolId;
+    }
+
+    function toggleSchoolDropdown() {
+      const dropdown = document.getElementById("schoolDropdown");
+      dropdown.classList.toggle("open");
+    }
+
+    function handleSchoolSelection() {
+      const checked = Array.from(
+        document.querySelectorAll(".school-dropdown input:checked")
+      ).map((input) => input.value);
+
+      saveSelectedSchoolIds(checked);
+      updateSchoolSummary();
+    }
+
+    function hydrateSchoolSelections() {
       const selected = getSelectedSchoolIds();
-      const chips = document.querySelectorAll(".school-chip");
 
-      chips.forEach((chip) => {
-        const schoolId = chip.getAttribute("data-school");
-
-        if (selected.includes(schoolId)) {
-          chip.classList.add("selected");
-        } else {
-          chip.classList.remove("selected");
-        }
+      document.querySelectorAll(".school-dropdown input").forEach((input) => {
+        input.checked = selected.includes(input.value);
       });
+
+      updateSchoolSummary();
     }
+
+    document.addEventListener("click", function(event) {
+      const dropdown = document.getElementById("schoolDropdown");
+      const selector = document.querySelector(".school-selector");
+
+      if (!selector.contains(event.target)) {
+        dropdown.classList.remove("open");
+      }
+    });
 
     function usePrompt(text) {
       input.value = text;
       input.focus();
-      autoResizeInput();
     }
 
     function addUserMessage(text) {
@@ -597,7 +701,9 @@
 
       row.appendChild(bubble);
       row.appendChild(avatar);
+
       messages.appendChild(row);
+
       scrollMessages();
     }
 
@@ -611,15 +717,20 @@
       const avatarImg = document.createElement("img");
       avatarImg.src = "/icon-transparent.png";
       avatarImg.alt = "AskMySchool";
+
       avatar.appendChild(avatarImg);
 
       const bubble = document.createElement("div");
-      bubble.className = options.notice ? "bubble notice" : "bubble";
+      bubble.className =
+        options.notice ? "bubble notice" : "bubble";
+
       bubble.innerHTML = formatAnswer(text);
 
       row.appendChild(avatar);
       row.appendChild(bubble);
+
       messages.appendChild(row);
+
       scrollMessages();
 
       return bubble;
@@ -635,15 +746,20 @@
       const avatarImg = document.createElement("img");
       avatarImg.src = "/icon-transparent.png";
       avatarImg.alt = "AskMySchool";
+
       avatar.appendChild(avatarImg);
 
       const bubble = document.createElement("div");
       bubble.className = "bubble";
-      bubble.innerHTML = '<div class="typing"><span></span><span></span><span></span></div>';
+
+      bubble.innerHTML =
+        '<div class="typing"><span></span><span></span><span></span></div>';
 
       row.appendChild(avatar);
       row.appendChild(bubble);
+
       messages.appendChild(row);
+
       scrollMessages();
 
       return row;
@@ -651,27 +767,35 @@
 
     async function sendMessage() {
       const text = input.value.trim();
+
       if (!text) return;
 
       const selectedSchoolIds = getSelectedSchoolIds();
 
       addUserMessage(text);
+
       input.value = "";
+
       autoResizeInput();
 
       button.disabled = true;
+
       const typingRow = addTypingMessage();
 
       try {
         const res = await fetch("/api/chat", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json"
+          },
+
           body: JSON.stringify({
             message: text,
             sessionId: askMySchoolSessionId,
             userId: askMySchoolUserId,
-            schoolId: getPrimarySchoolId(),
-            selectedSchoolIds: selectedSchoolIds,
+            schoolId:
+              selectedSchoolIds[0] || "districtwide",
+            selectedSchoolIds,
             channel: "web"
           })
         });
@@ -694,12 +818,26 @@
 
         typingRow.remove();
 
-        const isNotice = String(answer).toLowerCase().includes("update notice:");
-        addBotMessage(answer, { notice: isNotice });
+        const isNotice =
+          String(answer)
+            .toLowerCase()
+            .includes("update notice:");
+
+        addBotMessage(answer, {
+          notice: isNotice
+        });
+
       } catch (error) {
         typingRow.remove();
-        addBotMessage("Sorry, something went wrong. Please try again.");
-        console.error("AskMySchool UI error:", error);
+
+        addBotMessage(
+          "Sorry, something went wrong. Please try again."
+        );
+
+        console.error(
+          "AskMySchool UI error:",
+          error
+        );
       } finally {
         button.disabled = false;
         input.focus();
@@ -710,8 +848,16 @@
     function formatAnswer(value) {
       let text = escapeHtml(value);
 
-      text = text.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
-      text = text.replace(/Update Notice:/g, "<strong>Update Notice:</strong>");
+      text = text.replace(
+        /\*\*(.*?)\*\*/g,
+        "<strong>$1</strong>"
+      );
+
+      text = text.replace(
+        /Update Notice:/g,
+        "<strong>Update Notice:</strong>"
+      );
+
       text = text.replace(/\n/g, "<br>");
 
       return text;
@@ -732,7 +878,8 @@
 
     function autoResizeInput() {
       input.style.height = "auto";
-      input.style.height = Math.min(input.scrollHeight, 140) + "px";
+      input.style.height =
+        Math.min(input.scrollHeight, 140) + "px";
     }
 
     input.addEventListener("input", autoResizeInput);
@@ -744,7 +891,7 @@
       }
     });
 
-    updateSchoolChipUI();
+    hydrateSchoolSelections();
   </script>
 </body>
 </html>
