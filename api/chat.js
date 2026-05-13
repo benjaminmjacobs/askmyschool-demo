@@ -104,6 +104,96 @@ function toFirestoreBoolean(value) {
   return { booleanValue: Boolean(value) };
 }
 
+function normalizeSelectedSchoolIds(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((schoolId) => String(schoolId || "").trim())
+    .filter(Boolean);
+}
+
+function detectExplicitSchoolIdsFromMessage(message) {
+  const text = String(message || "").toLowerCase();
+
+  const schoolAliasRules = [
+    {
+      schoolId: "ben_hill_primary",
+      aliases: [
+        "ben hill primary",
+        "primary school",
+        "primary",
+        "bhp",
+      ],
+    },
+    {
+      schoolId: "ben_hill_elementary",
+      aliases: [
+        "ben hill elementary",
+        "elementary school",
+        "elementary",
+        "bhe",
+      ],
+    },
+    {
+      schoolId: "ben_hill_middle",
+      aliases: [
+        "ben hill middle",
+        "middle school",
+        "middle",
+        "bhms",
+      ],
+    },
+    {
+      schoolId: "fitzgerald_high",
+      aliases: [
+        "fitzgerald high school",
+        "fitzgerald high",
+        "high school",
+        "fhsc",
+        "fhscca",
+        "fhs",
+      ],
+    },
+    {
+      schoolId: "ben_hill_prek",
+      aliases: [
+        "ben hill pre-k",
+        "ben hill prek",
+        "pre-k",
+        "prek",
+        "pre k",
+      ],
+    },
+  ];
+
+  const matches = [];
+
+  for (const rule of schoolAliasRules) {
+    const matched = rule.aliases.some((alias) => text.includes(alias));
+
+    if (matched) {
+      matches.push(rule.schoolId);
+    }
+  }
+
+  return [...new Set(matches)];
+}
+
+function buildEffectiveSchoolIds(selectedSchoolIds, userMessage) {
+  const normalizedSelectedSchoolIds = normalizeSelectedSchoolIds(selectedSchoolIds);
+  const explicitSchoolIds = detectExplicitSchoolIdsFromMessage(userMessage);
+
+  return [
+    ...new Set([
+      "districtwide",
+      ...normalizedSelectedSchoolIds,
+      ...explicitSchoolIds,
+    ]),
+  ];
+}
+
 function classifyQuestion(message, emergencyData) {
   const text = String(message || "").toLowerCase();
 
@@ -113,8 +203,12 @@ function classifyQuestion(message, emergencyData) {
       text.includes("closed") ||
       text.includes("cancel") ||
       text.includes("emergency") ||
+      text.includes("update") ||
+      text.includes("notice") ||
       text.includes("weather") ||
       text.includes("storm") ||
+      text.includes("delay") ||
+      text.includes("delayed") ||
       text.includes("early release")
     ) {
       return "emergency";
@@ -126,7 +220,8 @@ function classifyQuestion(message, emergencyData) {
     text.includes("breakfast") ||
     text.includes("menu") ||
     text.includes("eat") ||
-    text.includes("food")
+    text.includes("food") ||
+    text.includes("cafeteria")
   ) {
     return "menus";
   }
@@ -138,7 +233,10 @@ function classifyQuestion(message, emergencyData) {
     text.includes("holiday") ||
     text.includes("early release") ||
     text.includes("spring break") ||
-    text.includes("fall break")
+    text.includes("fall break") ||
+    text.includes("graduation") ||
+    text.includes("honors day") ||
+    text.includes("event")
   ) {
     return "calendars";
   }
@@ -148,7 +246,11 @@ function classifyQuestion(message, emergencyData) {
     text.includes("attendance") ||
     text.includes("handbook") ||
     text.includes("policy") ||
-    text.includes("rules")
+    text.includes("rules") ||
+    text.includes("medicine") ||
+    text.includes("phone") ||
+    text.includes("bully") ||
+    text.includes("bullying")
   ) {
     return "policies";
   }
@@ -156,19 +258,21 @@ function classifyQuestion(message, emergencyData) {
   if (
     text.includes("grade") ||
     text.includes("test") ||
+    text.includes("testing") ||
     text.includes("milestones") ||
     text.includes("homework") ||
-    text.includes("academic")
+    text.includes("academic") ||
+    text.includes("mtss")
   ) {
     return "academics";
   }
 
   if (
-    text.includes("phone") ||
     text.includes("address") ||
     text.includes("principal") ||
     text.includes("office") ||
-    text.includes("contact")
+    text.includes("contact") ||
+    text.includes("superintendent")
   ) {
     return "district_info";
   }
@@ -301,7 +405,12 @@ async function updateFirestoreDocument(token, documentName, fields) {
   return data;
 }
 
-async function getEmergencyUpdates(token, districtId, schoolId) {
+async function getEmergencyUpdates(
+  token,
+  districtId,
+  selectedSchoolIds = [],
+  userMessage = ""
+) {
   const documents = await firestoreRunQuery(token, {
     from: [{ collectionId: "emergency_updates" }],
     where: {
@@ -329,6 +438,7 @@ async function getEmergencyUpdates(token, districtId, schoolId) {
 
   const now = new Date();
   const activeUpdates = [];
+  const effectiveSchoolIds = buildEffectiveSchoolIds(selectedSchoolIds, userMessage);
 
   for (const doc of documents) {
     const activeUntil = new Date(readField(doc, "active_until"));
@@ -342,11 +452,17 @@ async function getEmergencyUpdates(token, districtId, schoolId) {
       continue;
     }
 
+    const canDisplay = readField(doc, "can_display");
+
+    if (canDisplay === false) {
+      continue;
+    }
+
     const updateSchoolId = readField(doc, "school_id");
 
     const appliesToSchool =
       updateSchoolId === "districtwide" ||
-      updateSchoolId === schoolId;
+      effectiveSchoolIds.includes(updateSchoolId);
 
     if (!appliesToSchool) {
       continue;
@@ -371,6 +487,7 @@ async function getEmergencyUpdates(token, districtId, schoolId) {
     status: "success",
     has_active_notice: activeUpdates.length > 0,
     match_count: activeUpdates.length,
+    checked_school_ids: effectiveSchoolIds,
     updates: activeUpdates,
   };
 }
@@ -409,8 +526,8 @@ There is one or more active district or school notices.
 
 Rules:
 1. Treat this notice as official district/school information.
-2. If this is the first response in the session, mention the active notice before answering the user's question.
-3. For later responses, do not repeat the notice unless it is relevant to the user's question.
+2. If the user's question asks about an active notice, emergency update, delay, closure, cancellation, schedule change, or the affected school, mention the relevant notice before any other answer.
+3. If the user's selected schools or question match a notice, the notice is relevant.
 4. If the user's question is unrelated to the notice, answer normally.
 5. Do not mention Firestore, databases, internal systems, or implementation details.
 
@@ -502,8 +619,9 @@ module.exports = async function handler(req, res) {
   let resolvedSessionId = "";
   let resolvedUserId = "demo-user";
   let resolvedDistrictId = DEFAULT_DISTRICT_ID;
-  let resolvedSchoolId = DEFAULT_SCHOOL_ID;
   let resolvedChannel = "web";
+  let selectedSchoolIds = [];
+  let effectiveSchoolIds = ["districtwide"];
   let emergencyData = null;
 
   if (req.method !== "POST") {
@@ -519,8 +637,15 @@ module.exports = async function handler(req, res) {
     resolvedSessionId = requestBody.sessionId || "";
     resolvedUserId = requestBody.userId || "demo-user";
     resolvedDistrictId = requestBody.districtId || DEFAULT_DISTRICT_ID;
-    resolvedSchoolId = requestBody.schoolId || DEFAULT_SCHOOL_ID;
     resolvedChannel = requestBody.channel || "web";
+
+    selectedSchoolIds = normalizeSelectedSchoolIds(requestBody.selectedSchoolIds);
+
+    if (selectedSchoolIds.length === 0 && requestBody.schoolId) {
+      selectedSchoolIds = normalizeSelectedSchoolIds([requestBody.schoolId]);
+    }
+
+    effectiveSchoolIds = buildEffectiveSchoolIds(selectedSchoolIds, message);
 
     if (!message || typeof message !== "string") {
       return res.status(400).json({
@@ -538,7 +663,8 @@ module.exports = async function handler(req, res) {
     emergencyData = await getEmergencyUpdates(
       token,
       resolvedDistrictId,
-      resolvedSchoolId
+      selectedSchoolIds,
+      message
     );
 
     const data = await sendMessage(
@@ -554,7 +680,7 @@ module.exports = async function handler(req, res) {
     await logChatInteraction({
       timestamp: new Date().toISOString(),
       district_id: resolvedDistrictId,
-      school_id: resolvedSchoolId,
+      school_id: effectiveSchoolIds.join(", "),
       session_id: resolvedSessionId,
       user_id: resolvedUserId,
       request_id: requestId,
@@ -580,12 +706,15 @@ module.exports = async function handler(req, res) {
       sessionId: resolvedSessionId,
       userId: resolvedUserId,
       districtId: resolvedDistrictId,
-      schoolId: resolvedSchoolId,
+      schoolId: effectiveSchoolIds.join(", "),
+      selectedSchoolIds,
+      effectiveSchoolIds,
       requestId,
       emergency: {
         status: emergencyData.status || "unknown",
         has_active_notice: Boolean(emergencyData.has_active_notice),
         match_count: emergencyData.match_count || 0,
+        checked_school_ids: emergencyData.checked_school_ids || effectiveSchoolIds,
         updates: emergencyData.updates || [],
       },
     });
@@ -597,7 +726,7 @@ module.exports = async function handler(req, res) {
     await logChatInteraction({
       timestamp: new Date().toISOString(),
       district_id: resolvedDistrictId,
-      school_id: resolvedSchoolId,
+      school_id: effectiveSchoolIds.join(", "),
       session_id: resolvedSessionId || "unknown",
       user_id: resolvedUserId,
       request_id: requestId,
