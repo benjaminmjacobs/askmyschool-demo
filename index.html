@@ -342,19 +342,26 @@
     .notice {
       border-left: 5px solid var(--coral) !important;
       background: #fff7f2 !important;
+      padding: 12px 14px !important;
     }
 
     .notice-title {
       font-weight: 900;
       color: var(--evergreen);
-      margin-bottom: 4px;
+      margin-bottom: 5px;
+      line-height: 1.25;
+    }
+
+    .notice-message {
+      line-height: 1.35;
     }
 
     .notice-meta {
-      margin-top: 8px;
+      margin-top: 6px;
       font-size: 12px;
       color: rgba(43, 47, 50, 0.62);
       font-weight: 700;
+      line-height: 1.25;
     }
 
     .typing {
@@ -805,11 +812,12 @@
 
     function displayEmergencyUpdates(updates) {
       if (!Array.isArray(updates) || updates.length === 0) {
-        return;
+        return [];
       }
 
       const displayedNoticeIds = getDisplayedNoticeIds();
       const nextDisplayedNoticeIds = [...displayedNoticeIds];
+      const displayedNow = [];
 
       updates.forEach((update) => {
         const noticeId = getNoticeIdentity(update);
@@ -833,7 +841,7 @@
 
         const noticeHtml = `
           <div class="notice-title">Update Notice: ${escapeHtml(title)}</div>
-          <div>${escapeHtml(message)}</div>
+          <div class="notice-message">${escapeHtml(message)}</div>
           <div class="notice-meta">${escapeHtml(schoolScope)}</div>
         `;
 
@@ -843,9 +851,58 @@
         });
 
         nextDisplayedNoticeIds.push(noticeId);
+        displayedNow.push(update);
       });
 
       saveDisplayedNoticeIds(nextDisplayedNoticeIds);
+
+      return displayedNow;
+    }
+
+    function normalizeForComparison(value) {
+      return String(value || "")
+        .toLowerCase()
+        .replace(/[^\w\s]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+
+    function removeDuplicateNoticeText(answer, updatesShownNow) {
+      if (!Array.isArray(updatesShownNow) || updatesShownNow.length === 0) {
+        return answer;
+      }
+
+      let cleanedAnswer = String(answer || "");
+
+      updatesShownNow.forEach((update) => {
+        const noticeMessage = String(update.message || "").trim();
+
+        if (!noticeMessage) {
+          return;
+        }
+
+        const normalizedNotice = normalizeForComparison(noticeMessage);
+
+        const paragraphs = cleanedAnswer
+          .split(/\n\s*\n/)
+          .filter((paragraph) => {
+            const normalizedParagraph = normalizeForComparison(paragraph);
+
+            if (!normalizedParagraph) {
+              return false;
+            }
+
+            if (normalizedParagraph.includes(normalizedNotice)) {
+              return false;
+            }
+
+            return true;
+          });
+
+        cleanedAnswer = paragraphs.join("\n\n");
+      });
+
+      return cleanedAnswer.trim();
     }
 
     async function sendMessage() {
@@ -900,14 +957,23 @@
 
         typingRow.remove();
 
-        displayEmergencyUpdates(data.emergency?.updates || []);
+        const updatesShownNow = displayEmergencyUpdates(
+          data.emergency?.updates || []
+        );
 
-        const answerAlreadyLooksLikeNotice =
-          String(answer).toLowerCase().includes("update notice:");
+        const cleanedAnswer = removeDuplicateNoticeText(
+          answer,
+          updatesShownNow
+        );
 
-        addBotMessage(answer, {
-          notice: answerAlreadyLooksLikeNotice
-        });
+        if (cleanedAnswer) {
+          const answerAlreadyLooksLikeNotice =
+            String(cleanedAnswer).toLowerCase().includes("update notice:");
+
+          addBotMessage(cleanedAnswer, {
+            notice: answerAlreadyLooksLikeNotice
+          });
+        }
 
       } catch (error) {
         typingRow.remove();
