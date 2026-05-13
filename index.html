@@ -125,7 +125,7 @@
     .school-selector-button {
       width: 100%;
       border: 1px solid rgba(10, 109, 128, 0.16);
-      background: rgba(255,255,255,0.82);
+      background: rgba(255, 255, 255, 0.82);
       border-radius: 18px;
       padding: 13px 15px;
       cursor: pointer;
@@ -137,7 +137,7 @@
     }
 
     .school-selector-button:hover {
-      box-shadow: 0 8px 20px rgba(10,109,128,0.10);
+      box-shadow: 0 8px 20px rgba(10, 109, 128, 0.10);
       transform: translateY(-1px);
     }
 
@@ -156,7 +156,7 @@
 
     .school-selector-subtitle {
       font-size: 11px;
-      color: rgba(43,47,50,0.58);
+      color: rgba(43, 47, 50, 0.58);
       font-weight: 700;
     }
 
@@ -172,9 +172,9 @@
       left: 0;
       right: 0;
       background: white;
-      border: 1px solid rgba(10,109,128,0.12);
+      border: 1px solid rgba(10, 109, 128, 0.12);
       border-radius: 20px;
-      box-shadow: 0 18px 45px rgba(19,77,69,0.16);
+      box-shadow: 0 18px 45px rgba(19, 77, 69, 0.16);
       padding: 10px;
       display: none;
       z-index: 50;
@@ -195,7 +195,7 @@
     }
 
     .school-option:hover {
-      background: rgba(10,109,128,0.06);
+      background: rgba(10, 109, 128, 0.06);
     }
 
     .school-option input {
@@ -342,6 +342,19 @@
     .notice {
       border-left: 5px solid var(--coral) !important;
       background: #fff7f2 !important;
+    }
+
+    .notice-title {
+      font-weight: 900;
+      color: var(--evergreen);
+      margin-bottom: 4px;
+    }
+
+    .notice-meta {
+      margin-top: 8px;
+      font-size: 12px;
+      color: rgba(43, 47, 50, 0.62);
+      font-weight: 700;
     }
 
     .typing {
@@ -493,18 +506,13 @@
         <div class="school-selector">
           <button class="school-selector-button" onclick="toggleSchoolDropdown()">
             <div class="school-selector-left">
-              <div class="school-selector-title">
-                Follow school alerts
-              </div>
-
+              <div class="school-selector-title">Follow school alerts</div>
               <div class="school-selector-subtitle" id="schoolSelectorSummary">
                 Select schools
               </div>
             </div>
 
-            <div class="school-selector-arrow">
-              ▼
-            </div>
+            <div class="school-selector-arrow">▼</div>
           </button>
 
           <div class="school-dropdown" id="schoolDropdown">
@@ -557,7 +565,6 @@
       <section id="messages" class="messages">
         <div class="welcome-card">
           <h2>What do you need to know?</h2>
-
           <p>
             Ask about menus, calendars, school events, closures, policies, or district information.
           </p>
@@ -589,6 +596,7 @@
     let askMySchoolUserId = "demo-user";
 
     const SCHOOL_STORAGE_KEY = "askmyschool_selected_schools";
+    const DISPLAYED_NOTICE_STORAGE_KEY = "askmyschool_displayed_notice_ids";
 
     const input = document.getElementById("input");
     const messages = document.getElementById("messages");
@@ -622,19 +630,16 @@
       const summary = document.getElementById("schoolSelectorSummary");
 
       if (selected.length === 0) {
-        summary.textContent =
-          "Select schools for school-specific alerts";
+        summary.textContent = "Select schools for school-specific alerts";
         return;
       }
 
       if (selected.length === 1) {
-        const label = getSchoolDisplayName(selected[0]);
-        summary.textContent = label;
+        summary.textContent = getSchoolDisplayName(selected[0]);
         return;
       }
 
-      summary.textContent =
-        `${selected.length} schools selected`;
+      summary.textContent = `${selected.length} schools selected`;
     }
 
     function getSchoolDisplayName(schoolId) {
@@ -643,7 +648,8 @@
         ben_hill_elementary: "Ben Hill Elementary School",
         ben_hill_middle: "Ben Hill Middle School",
         fitzgerald_high: "Fitzgerald High School",
-        ben_hill_prek: "Ben Hill Pre-K"
+        ben_hill_prek: "Ben Hill Pre-K",
+        districtwide: "Districtwide"
       };
 
       return labels[schoolId] || schoolId;
@@ -685,6 +691,7 @@
     function usePrompt(text) {
       input.value = text;
       input.focus();
+      autoResizeInput();
     }
 
     function addUserMessage(text) {
@@ -721,10 +728,8 @@
       avatar.appendChild(avatarImg);
 
       const bubble = document.createElement("div");
-      bubble.className =
-        options.notice ? "bubble notice" : "bubble";
-
-      bubble.innerHTML = formatAnswer(text);
+      bubble.className = options.notice ? "bubble notice" : "bubble";
+      bubble.innerHTML = options.html ? text : formatAnswer(text);
 
       row.appendChild(avatar);
       row.appendChild(bubble);
@@ -765,6 +770,84 @@
       return row;
     }
 
+    function getDisplayedNoticeIds() {
+      try {
+        const stored = localStorage.getItem(DISPLAYED_NOTICE_STORAGE_KEY);
+
+        if (!stored) {
+          return [];
+        }
+
+        const parsed = JSON.parse(stored);
+
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    }
+
+    function saveDisplayedNoticeIds(noticeIds) {
+      localStorage.setItem(
+        DISPLAYED_NOTICE_STORAGE_KEY,
+        JSON.stringify(noticeIds)
+      );
+    }
+
+    function getNoticeIdentity(update) {
+      return [
+        update.update_id || "",
+        update.school_id || "",
+        update.title || "",
+        update.message || "",
+        update.active_until || ""
+      ].join("|");
+    }
+
+    function displayEmergencyUpdates(updates) {
+      if (!Array.isArray(updates) || updates.length === 0) {
+        return;
+      }
+
+      const displayedNoticeIds = getDisplayedNoticeIds();
+      const nextDisplayedNoticeIds = [...displayedNoticeIds];
+
+      updates.forEach((update) => {
+        const noticeId = getNoticeIdentity(update);
+
+        if (displayedNoticeIds.includes(noticeId)) {
+          return;
+        }
+
+        const schoolScope =
+          update.school_scope ||
+          getSchoolDisplayName(update.school_id) ||
+          "Districtwide";
+
+        const title =
+          update.title ||
+          "School Notice";
+
+        const message =
+          update.message ||
+          "There is an active school notice.";
+
+        const noticeHtml = `
+          <div class="notice-title">Update Notice: ${escapeHtml(title)}</div>
+          <div>${escapeHtml(message)}</div>
+          <div class="notice-meta">${escapeHtml(schoolScope)}</div>
+        `;
+
+        addBotMessage(noticeHtml, {
+          notice: true,
+          html: true
+        });
+
+        nextDisplayedNoticeIds.push(noticeId);
+      });
+
+      saveDisplayedNoticeIds(nextDisplayedNoticeIds);
+    }
+
     async function sendMessage() {
       const text = input.value.trim();
 
@@ -793,8 +876,7 @@
             message: text,
             sessionId: askMySchoolSessionId,
             userId: askMySchoolUserId,
-            schoolId:
-              selectedSchoolIds[0] || "districtwide",
+            schoolId: selectedSchoolIds[0] || "districtwide",
             selectedSchoolIds,
             channel: "web"
           })
@@ -818,13 +900,13 @@
 
         typingRow.remove();
 
-        const isNotice =
-          String(answer)
-            .toLowerCase()
-            .includes("update notice:");
+        displayEmergencyUpdates(data.emergency?.updates || []);
+
+        const answerAlreadyLooksLikeNotice =
+          String(answer).toLowerCase().includes("update notice:");
 
         addBotMessage(answer, {
-          notice: isNotice
+          notice: answerAlreadyLooksLikeNotice
         });
 
       } catch (error) {
