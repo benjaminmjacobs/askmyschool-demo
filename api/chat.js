@@ -1,4 +1,6 @@
 const { GoogleAuth } = require("google-auth-library");
+const { BigQuery } = require("@google-cloud/bigquery");
+const crypto = require("crypto");
 
 const PROJECT_ID = "346318948573";
 const LOCATION = "us-west1";
@@ -28,14 +30,19 @@ function getCurrentDateForAgent() {
   return `${formatter.format(new Date())}[America/New_York]`;
 }
 
+function getCredentials() {
+  return JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+}
+
 async function getAccessToken() {
-  const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+  const credentials = getCredentials();
 
   const auth = new GoogleAuth({
     credentials,
     scopes: [
       "https://www.googleapis.com/auth/cloud-platform",
       "https://www.googleapis.com/auth/datastore",
+      "https://www.googleapis.com/auth/bigquery",
     ],
   });
 
@@ -43,6 +50,36 @@ async function getAccessToken() {
   const tokenResponse = await client.getAccessToken();
 
   return tokenResponse.token;
+}
+
+function getBigQueryClient() {
+  return new BigQuery({
+    projectId: process.env.BIGQUERY_PROJECT_ID || "pinevera-askmyschool",
+    credentials: getCredentials(),
+  });
+}
+
+async function logChatInteraction(row) {
+  try {
+    if (
+      !process.env.BIGQUERY_PROJECT_ID ||
+      !process.env.BIGQUERY_DATASET ||
+      !process.env.BIGQUERY_TABLE ||
+      !process.env.GOOGLE_SERVICE_ACCOUNT_JSON
+    ) {
+      console.warn("BigQuery logging skipped: missing environment variable.");
+      return;
+    }
+
+    const bigquery = getBigQueryClient();
+
+    await bigquery
+      .dataset(process.env.BIGQUERY_DATASET)
+      .table(process.env.BIGQUERY_TABLE)
+      .insert([row]);
+  } catch (error) {
+    console.error("BigQuery logging failed:", error);
+  }
 }
 
 function readField(document, fieldName) {
@@ -65,6 +102,123 @@ function toFirestoreString(value) {
 
 function toFirestoreBoolean(value) {
   return { booleanValue: Boolean(value) };
+}
+
+function classifyQuestion(message, emergencyData) {
+  const text = String(message || "").toLowerCase();
+
+  if (emergencyData?.has_active_notice) {
+    if (
+      text.includes("school tomorrow") ||
+      text.includes("closed") ||
+      text.includes("cancel") ||
+      text.includes("emergency") ||
+      text.includes("weather") ||
+      text.includes("storm") ||
+      text.includes("early release")
+    ) {
+      return "emergency";
+    }
+  }
+
+  if (
+    text.includes("lunch") ||
+    text.includes("breakfast") ||
+    text.includes("menu") ||
+    text.includes("eat") ||
+    text.includes("food")
+  ) {
+    return "menus";
+  }
+
+  if (
+    text.includes("calendar") ||
+    text.includes("when is") ||
+    text.includes("what day") ||
+    text.includes("holiday") ||
+    text.includes("early release") ||
+    text.includes("spring break") ||
+    text.includes("fall break")
+  ) {
+    return "calendars";
+  }
+
+  if (
+    text.includes("dress code") ||
+    text.includes("attendance") ||
+    text.includes("handbook") ||
+    text.includes("policy") ||
+    text.includes("rules")
+  ) {
+    return "policies";
+  }
+
+  if (
+    text.includes("grade") ||
+    text.includes("test") ||
+    text.includes("milestones") ||
+    text.includes("homework") ||
+    text.includes("academic")
+  ) {
+    return "academics";
+  }
+
+  if (
+    text.includes("phone") ||
+    text.includes("address") ||
+    text.includes("principal") ||
+    text.includes("office") ||
+    text.includes("contact")
+  ) {
+    return "district_info";
+  }
+
+  return "unknown";
+}
+
+function determineAnswerStatus(finalResponse, errorMessage, emergencyData) {
+  if (errorMessage) return "error";
+
+  const responseText = String(finalResponse || "").toLowerCase();
+
+  if (
+    responseText.includes("couldn't find") ||
+    responseText.includes("could not find") ||
+    responseText.includes("i couldn't find") ||
+    responseText.includes("i could not find") ||
+    responseText.includes("don't have that information") ||
+    responseText.includes("do not have that information") ||
+    responseText.includes("no information")
+  ) {
+    return "no_answer_found";
+  }
+
+  if (emergencyData?.has_active_notice) {
+    return "answered_with_emergency_context";
+  }
+
+  return "answered";
+}
+
+function determineResponseSource(emergencyData, success) {
+  if (!success) return "vercel_error";
+
+  if (emergencyData?.has_active_notice) {
+    return "agent_engine_with_emergency_context";
+  }
+
+  return "agent_engine";
+}
+
+function getEmergencyUpdateIds(emergencyData) {
+  const updates = Array.isArray(emergencyData?.updates)
+    ? emergencyData.updates
+    : [];
+
+  return updates
+    .map((update) => update.update_id || update.title || "")
+    .filter(Boolean)
+    .join(", ");
 }
 
 async function createSession(token, userId) {
@@ -199,6 +353,7 @@ async function getEmergencyUpdates(token, districtId, schoolId) {
     }
 
     activeUpdates.push({
+      update_id: readField(doc, "update_id"),
       title: readField(doc, "title"),
       message: readField(doc, "message"),
       district_id: readField(doc, "district_id"),
@@ -233,6 +388,7 @@ function buildEmergencyContext(emergencyData) {
     .map((update, index) => {
       return [
         `ACTIVE_NOTICE_${index + 1}:`,
+        `Update ID: ${update.update_id || ""}`,
         `Title: ${update.title || ""}`,
         `Message: ${update.message || ""}`,
         `District ID: ${update.district_id || ""}`,
@@ -339,6 +495,17 @@ async function sendMessage(token, userId, sessionId, message, emergencyData) {
 }
 
 module.exports = async function handler(req, res) {
+  const requestStartTime = Date.now();
+  const requestId = crypto.randomUUID();
+
+  let message = "";
+  let resolvedSessionId = "";
+  let resolvedUserId = "demo-user";
+  let resolvedDistrictId = DEFAULT_DISTRICT_ID;
+  let resolvedSchoolId = DEFAULT_SCHOOL_ID;
+  let resolvedChannel = "web";
+  let emergencyData = null;
+
   if (req.method !== "POST") {
     return res.status(405).json({
       error: "Method not allowed",
@@ -346,13 +513,14 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    const {
-      message,
-      sessionId,
-      userId,
-      districtId,
-      schoolId,
-    } = req.body || {};
+    const requestBody = req.body || {};
+
+    message = requestBody.message;
+    resolvedSessionId = requestBody.sessionId || "";
+    resolvedUserId = requestBody.userId || "demo-user";
+    resolvedDistrictId = requestBody.districtId || DEFAULT_DISTRICT_ID;
+    resolvedSchoolId = requestBody.schoolId || DEFAULT_SCHOOL_ID;
+    resolvedChannel = requestBody.channel || "web";
 
     if (!message || typeof message !== "string") {
       return res.status(400).json({
@@ -361,19 +529,13 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    const resolvedUserId = userId || "demo-user";
-    const resolvedDistrictId = districtId || DEFAULT_DISTRICT_ID;
-    const resolvedSchoolId = schoolId || DEFAULT_SCHOOL_ID;
-
     const token = await getAccessToken();
-
-    let resolvedSessionId = sessionId;
 
     if (!resolvedSessionId) {
       resolvedSessionId = await createSession(token, resolvedUserId);
     }
 
-    const emergencyData = await getEmergencyUpdates(
+    emergencyData = await getEmergencyUpdates(
       token,
       resolvedDistrictId,
       resolvedSchoolId
@@ -387,6 +549,31 @@ module.exports = async function handler(req, res) {
       emergencyData
     );
 
+    const latencyMs = Date.now() - requestStartTime;
+
+    await logChatInteraction({
+      timestamp: new Date().toISOString(),
+      district_id: resolvedDistrictId,
+      school_id: resolvedSchoolId,
+      session_id: resolvedSessionId,
+      user_id: resolvedUserId,
+      request_id: requestId,
+      environment: process.env.VERCEL_ENV || "unknown",
+      user_question: message,
+      final_response: data.text || "",
+      question_category: classifyQuestion(message, emergencyData),
+      answer_status: determineAnswerStatus(data.text, null, emergencyData),
+      response_source: determineResponseSource(emergencyData, true),
+      channel: resolvedChannel,
+      emergency_triggered: Boolean(emergencyData?.has_active_notice),
+      emergency_update_id: getEmergencyUpdateIds(emergencyData),
+      latency_ms: latencyMs,
+      success: true,
+      error_message: "",
+      source: "vercel_api_chat",
+      reasoning_engine_id: REASONING_ENGINE_ID,
+    });
+
     return res.status(200).json({
       text: data.text,
       raw: data.raw,
@@ -394,6 +581,7 @@ module.exports = async function handler(req, res) {
       userId: resolvedUserId,
       districtId: resolvedDistrictId,
       schoolId: resolvedSchoolId,
+      requestId,
       emergency: {
         status: emergencyData.status || "unknown",
         has_active_notice: Boolean(emergencyData.has_active_notice),
@@ -404,9 +592,35 @@ module.exports = async function handler(req, res) {
   } catch (error) {
     console.error("AskMySchool API error:", error);
 
+    const latencyMs = Date.now() - requestStartTime;
+
+    await logChatInteraction({
+      timestamp: new Date().toISOString(),
+      district_id: resolvedDistrictId,
+      school_id: resolvedSchoolId,
+      session_id: resolvedSessionId || "unknown",
+      user_id: resolvedUserId,
+      request_id: requestId,
+      environment: process.env.VERCEL_ENV || "unknown",
+      user_question: message || "",
+      final_response: "",
+      question_category: classifyQuestion(message, emergencyData),
+      answer_status: "error",
+      response_source: "vercel_error",
+      channel: resolvedChannel,
+      emergency_triggered: Boolean(emergencyData?.has_active_notice),
+      emergency_update_id: getEmergencyUpdateIds(emergencyData),
+      latency_ms: latencyMs,
+      success: false,
+      error_message: error.message || "Unknown server error",
+      source: "vercel_api_chat",
+      reasoning_engine_id: REASONING_ENGINE_ID,
+    });
+
     return res.status(500).json({
       error: "Chat request failed",
       details: error.message || "Unknown server error",
+      requestId,
     });
   }
 };
