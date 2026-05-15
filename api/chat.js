@@ -60,6 +60,8 @@ function getBigQueryClient() {
 }
 
 async function logChatInteraction(row) {
+  const bigQueryStartTime = Date.now();
+
   try {
     if (
       !process.env.BIGQUERY_PROJECT_ID ||
@@ -76,7 +78,17 @@ async function logChatInteraction(row) {
     await bigquery
       .dataset(process.env.BIGQUERY_DATASET)
       .table(process.env.BIGQUERY_TABLE)
-      .insert([row]);
+      .insert([
+        {
+          ...row,
+
+          // This is logged as 0 because BigQuery cannot know its own completed insert time
+          // before the row is inserted. Vercel logs still capture real insert duration below.
+          bigquery_latency_ms: 0,
+        },
+      ]);
+
+    console.log("BigQuery logging completed in", Date.now() - bigQueryStartTime, "ms");
   } catch (error) {
     console.error("BigQuery logging failed:", error);
   }
@@ -120,30 +132,15 @@ function detectExplicitSchoolIdsFromMessage(message) {
   const schoolAliasRules = [
     {
       schoolId: "ben_hill_primary",
-      aliases: [
-        "ben hill primary",
-        "primary school",
-        "primary",
-        "bhp",
-      ],
+      aliases: ["ben hill primary", "primary school", "primary", "bhp"],
     },
     {
       schoolId: "ben_hill_elementary",
-      aliases: [
-        "ben hill elementary",
-        "elementary school",
-        "elementary",
-        "bhe",
-      ],
+      aliases: ["ben hill elementary", "elementary school", "elementary", "bhe"],
     },
     {
       schoolId: "ben_hill_middle",
-      aliases: [
-        "ben hill middle",
-        "middle school",
-        "middle",
-        "bhms",
-      ],
+      aliases: ["ben hill middle", "middle school", "middle", "bhms"],
     },
     {
       schoolId: "fitzgerald_high",
@@ -158,13 +155,7 @@ function detectExplicitSchoolIdsFromMessage(message) {
     },
     {
       schoolId: "ben_hill_prek",
-      aliases: [
-        "ben hill pre-k",
-        "ben hill prek",
-        "pre-k",
-        "prek",
-        "pre k",
-      ],
+      aliases: ["ben hill pre-k", "ben hill prek", "pre-k", "prek", "pre k"],
     },
   ];
 
@@ -187,7 +178,7 @@ function buildEffectiveSchoolIds(selectedSchoolIds, userMessage) {
 
   return [
     ...new Set([
-      "districtwide",
+      DEFAULT_SCHOOL_ID,
       ...normalizedSelectedSchoolIds,
       ...explicitSchoolIds,
     ]),
@@ -262,7 +253,11 @@ function classifyQuestion(message, emergencyData) {
     text.includes("milestones") ||
     text.includes("homework") ||
     text.includes("academic") ||
-    text.includes("mtss")
+    text.includes("mtss") ||
+    text.includes("504") ||
+    text.includes("iep") ||
+    text.includes("sped") ||
+    text.includes("retention")
   ) {
     return "academics";
   }
@@ -272,9 +267,29 @@ function classifyQuestion(message, emergencyData) {
     text.includes("principal") ||
     text.includes("office") ||
     text.includes("contact") ||
+    text.includes("phone number") ||
+    text.includes("email") ||
     text.includes("superintendent")
   ) {
     return "district_info";
+  }
+
+  if (
+    text.includes("football") ||
+    text.includes("baseball") ||
+    text.includes("basketball") ||
+    text.includes("softball") ||
+    text.includes("soccer") ||
+    text.includes("volleyball") ||
+    text.includes("track") ||
+    text.includes("athletic") ||
+    text.includes("sports") ||
+    text.includes("club") ||
+    text.includes("band") ||
+    text.includes("chorus") ||
+    text.includes("extracurricular")
+  ) {
+    return "athletics_extracurricular";
   }
 
   return "unknown";
@@ -323,6 +338,16 @@ function getEmergencyUpdateIds(emergencyData) {
     .map((update) => update.update_id || update.title || "")
     .filter(Boolean)
     .join(", ");
+}
+
+function getFrontendSource(req, requestBody) {
+  return (
+    requestBody.frontendSource ||
+    requestBody.source ||
+    req.headers.origin ||
+    req.headers.referer ||
+    "unknown"
+  );
 }
 
 async function createSession(token, userId) {
@@ -461,7 +486,7 @@ async function getEmergencyUpdates(
     const updateSchoolId = readField(doc, "school_id");
 
     const appliesToSchool =
-      updateSchoolId === "districtwide" ||
+      updateSchoolId === DEFAULT_SCHOOL_ID ||
       effectiveSchoolIds.includes(updateSchoolId);
 
     if (!appliesToSchool) {
@@ -615,14 +640,20 @@ module.exports = async function handler(req, res) {
   const requestStartTime = Date.now();
   const requestId = crypto.randomUUID();
 
+  let errorStage = "request_started";
+
   let message = "";
   let resolvedSessionId = "";
   let resolvedUserId = "demo-user";
   let resolvedDistrictId = DEFAULT_DISTRICT_ID;
   let resolvedChannel = "web";
   let selectedSchoolIds = [];
-  let effectiveSchoolIds = ["districtwide"];
+  let effectiveSchoolIds = [DEFAULT_SCHOOL_ID];
   let emergencyData = null;
+  let frontendSource = "unknown";
+
+  let firestoreLatencyMs = 0;
+  let agentLatencyMs = 0;
 
   if (req.method !== "POST") {
     return res.status(405).json({
@@ -631,6 +662,8 @@ module.exports = async function handler(req, res) {
   }
 
   try {
+    errorStage = "parse_request";
+
     const requestBody = req.body || {};
 
     message = requestBody.message;
@@ -638,6 +671,7 @@ module.exports = async function handler(req, res) {
     resolvedUserId = requestBody.userId || "demo-user";
     resolvedDistrictId = requestBody.districtId || DEFAULT_DISTRICT_ID;
     resolvedChannel = requestBody.channel || "web";
+    frontendSource = getFrontendSource(req, requestBody);
 
     selectedSchoolIds = normalizeSelectedSchoolIds(requestBody.selectedSchoolIds);
 
@@ -654,11 +688,16 @@ module.exports = async function handler(req, res) {
       });
     }
 
+    errorStage = "get_access_token";
     const token = await getAccessToken();
 
     if (!resolvedSessionId) {
+      errorStage = "create_session";
       resolvedSessionId = await createSession(token, resolvedUserId);
     }
+
+    errorStage = "firestore_emergency_check";
+    const firestoreStartTime = Date.now();
 
     emergencyData = await getEmergencyUpdates(
       token,
@@ -666,6 +705,11 @@ module.exports = async function handler(req, res) {
       selectedSchoolIds,
       message
     );
+
+    firestoreLatencyMs = Date.now() - firestoreStartTime;
+
+    errorStage = "agent_engine_request";
+    const agentStartTime = Date.now();
 
     const data = await sendMessage(
       token,
@@ -675,7 +719,13 @@ module.exports = async function handler(req, res) {
       emergencyData
     );
 
-    const latencyMs = Date.now() - requestStartTime;
+    agentLatencyMs = Date.now() - agentStartTime;
+
+    const totalLatencyMs = Date.now() - requestStartTime;
+    const routeHint = classifyQuestion(message, emergencyData);
+    const finalText = data.text || "";
+
+    errorStage = "bigquery_log_success";
 
     await logChatInteraction({
       timestamp: new Date().toISOString(),
@@ -685,23 +735,40 @@ module.exports = async function handler(req, res) {
       user_id: resolvedUserId,
       request_id: requestId,
       environment: process.env.VERCEL_ENV || "unknown",
+
       user_question: message,
-      final_response: data.text || "",
-      question_category: classifyQuestion(message, emergencyData),
-      answer_status: determineAnswerStatus(data.text, null, emergencyData),
+      final_response: finalText,
+
+      question_category: routeHint,
+      route_hint: routeHint,
+      answer_status: determineAnswerStatus(finalText, null, emergencyData),
       response_source: determineResponseSource(emergencyData, true),
       channel: resolvedChannel,
+
+      selected_school_ids: selectedSchoolIds.join(", "),
+      effective_school_ids: effectiveSchoolIds.join(", "),
       emergency_triggered: Boolean(emergencyData?.has_active_notice),
+      emergency_match_count: emergencyData?.match_count || 0,
       emergency_update_id: getEmergencyUpdateIds(emergencyData),
-      latency_ms: latencyMs,
+
+      latency_ms: totalLatencyMs,
+      total_latency_ms: totalLatencyMs,
+      firestore_latency_ms: firestoreLatencyMs,
+      agent_latency_ms: agentLatencyMs,
+
+      response_character_count: finalText.length,
+      user_agent: req.headers["user-agent"] || "",
+      frontend_source: frontendSource,
+
       success: true,
       error_message: "",
+      error_stage: "",
       source: "vercel_api_chat",
       reasoning_engine_id: REASONING_ENGINE_ID,
     });
 
     return res.status(200).json({
-      text: data.text,
+      text: finalText,
       raw: data.raw,
       sessionId: resolvedSessionId,
       userId: resolvedUserId,
@@ -710,6 +777,11 @@ module.exports = async function handler(req, res) {
       selectedSchoolIds,
       effectiveSchoolIds,
       requestId,
+      timing: {
+        total_latency_ms: totalLatencyMs,
+        firestore_latency_ms: firestoreLatencyMs,
+        agent_latency_ms: agentLatencyMs,
+      },
       emergency: {
         status: emergencyData.status || "unknown",
         has_active_notice: Boolean(emergencyData.has_active_notice),
@@ -721,7 +793,8 @@ module.exports = async function handler(req, res) {
   } catch (error) {
     console.error("AskMySchool API error:", error);
 
-    const latencyMs = Date.now() - requestStartTime;
+    const totalLatencyMs = Date.now() - requestStartTime;
+    const routeHint = classifyQuestion(message, emergencyData);
 
     await logChatInteraction({
       timestamp: new Date().toISOString(),
@@ -731,17 +804,34 @@ module.exports = async function handler(req, res) {
       user_id: resolvedUserId,
       request_id: requestId,
       environment: process.env.VERCEL_ENV || "unknown",
+
       user_question: message || "",
       final_response: "",
-      question_category: classifyQuestion(message, emergencyData),
+
+      question_category: routeHint,
+      route_hint: routeHint,
       answer_status: "error",
       response_source: "vercel_error",
       channel: resolvedChannel,
+
+      selected_school_ids: selectedSchoolIds.join(", "),
+      effective_school_ids: effectiveSchoolIds.join(", "),
       emergency_triggered: Boolean(emergencyData?.has_active_notice),
+      emergency_match_count: emergencyData?.match_count || 0,
       emergency_update_id: getEmergencyUpdateIds(emergencyData),
-      latency_ms: latencyMs,
+
+      latency_ms: totalLatencyMs,
+      total_latency_ms: totalLatencyMs,
+      firestore_latency_ms: firestoreLatencyMs,
+      agent_latency_ms: agentLatencyMs,
+
+      response_character_count: 0,
+      user_agent: req.headers["user-agent"] || "",
+      frontend_source: frontendSource,
+
       success: false,
       error_message: error.message || "Unknown server error",
+      error_stage: errorStage,
       source: "vercel_api_chat",
       reasoning_engine_id: REASONING_ENGINE_ID,
     });
@@ -750,6 +840,7 @@ module.exports = async function handler(req, res) {
       error: "Chat request failed",
       details: error.message || "Unknown server error",
       requestId,
+      errorStage,
     });
   }
 };
