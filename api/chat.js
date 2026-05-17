@@ -81,9 +81,6 @@ async function logChatInteraction(row) {
       .insert([
         {
           ...row,
-
-          // This is logged as 0 because BigQuery cannot know its own completed insert time
-          // before the row is inserted. Vercel logs still capture real insert duration below.
           bigquery_latency_ms: 0,
         },
       ]);
@@ -188,22 +185,27 @@ function buildEffectiveSchoolIds(selectedSchoolIds, userMessage) {
 function classifyQuestion(message, emergencyData) {
   const text = String(message || "").toLowerCase();
 
-  if (emergencyData?.has_active_notice) {
-    if (
-      text.includes("school tomorrow") ||
-      text.includes("closed") ||
-      text.includes("cancel") ||
-      text.includes("emergency") ||
-      text.includes("update") ||
-      text.includes("notice") ||
-      text.includes("weather") ||
-      text.includes("storm") ||
-      text.includes("delay") ||
-      text.includes("delayed") ||
-      text.includes("early release")
-    ) {
-      return "emergency";
-    }
+  if (
+    text.includes("emergency") ||
+    text.includes("update") ||
+    text.includes("notice") ||
+    text.includes("alert") ||
+    text.includes("closed") ||
+    text.includes("closure") ||
+    text.includes("delay") ||
+    text.includes("delayed") ||
+    text.includes("early release") ||
+    text.includes("cancel") ||
+    text.includes("canceled") ||
+    text.includes("cancelled") ||
+    text.includes("weather") ||
+    text.includes("storm") ||
+    text.includes("is there school") ||
+    text.includes("school tomorrow") ||
+    text.includes("no school") ||
+    text.includes("do we have school")
+  ) {
+    return "emergency_calendar_status";
   }
 
   if (
@@ -212,7 +214,8 @@ function classifyQuestion(message, emergencyData) {
     text.includes("menu") ||
     text.includes("eat") ||
     text.includes("food") ||
-    text.includes("cafeteria")
+    text.includes("cafeteria") ||
+    text.includes("meal")
   ) {
     return "menus";
   }
@@ -222,44 +225,70 @@ function classifyQuestion(message, emergencyData) {
     text.includes("when is") ||
     text.includes("what day") ||
     text.includes("holiday") ||
-    text.includes("early release") ||
     text.includes("spring break") ||
     text.includes("fall break") ||
+    text.includes("winter break") ||
+    text.includes("thanksgiving break") ||
     text.includes("graduation") ||
     text.includes("honors day") ||
-    text.includes("event")
+    text.includes("event") ||
+    text.includes("open house") ||
+    text.includes("picture day") ||
+    text.includes("testing date") ||
+    text.includes("last day of school") ||
+    text.includes("first day of school")
   ) {
     return "calendars";
   }
 
   if (
+    text.includes("discipline") ||
+    text.includes("punishment") ||
+    text.includes("suspended") ||
+    text.includes("suspension") ||
+    text.includes("expelled") ||
+    text.includes("expulsion") ||
     text.includes("dress code") ||
     text.includes("attendance") ||
+    text.includes("absent") ||
+    text.includes("tardy") ||
     text.includes("handbook") ||
     text.includes("policy") ||
     text.includes("rules") ||
     text.includes("medicine") ||
-    text.includes("phone") ||
+    text.includes("medication") ||
+    text.includes("phone policy") ||
+    text.includes("cell phone") ||
     text.includes("bully") ||
     text.includes("bullying")
   ) {
-    return "policies";
+    return "student_policies";
   }
 
   if (
     text.includes("grade") ||
+    text.includes("grades") ||
     text.includes("test") ||
     text.includes("testing") ||
     text.includes("milestones") ||
+    text.includes("eoc") ||
+    text.includes("end of course") ||
     text.includes("homework") ||
     text.includes("academic") ||
+    text.includes("class") ||
+    text.includes("course") ||
+    text.includes("credits") ||
+    text.includes("graduation requirement") ||
+    text.includes("promotion") ||
+    text.includes("retention") ||
     text.includes("mtss") ||
+    text.includes("rti") ||
     text.includes("504") ||
     text.includes("iep") ||
     text.includes("sped") ||
-    text.includes("retention")
+    text.includes("special education")
   ) {
-    return "academics";
+    return "academics_support";
   }
 
   if (
@@ -269,9 +298,15 @@ function classifyQuestion(message, emergencyData) {
     text.includes("contact") ||
     text.includes("phone number") ||
     text.includes("email") ||
-    text.includes("superintendent")
+    text.includes("superintendent") ||
+    text.includes("who do i call") ||
+    text.includes("who should i call") ||
+    text.includes("number") ||
+    text.includes("front desk") ||
+    text.includes("teacher") ||
+    text.includes("counselor")
   ) {
-    return "district_info";
+    return "directory_contacts";
   }
 
   if (
@@ -282,17 +317,64 @@ function classifyQuestion(message, emergencyData) {
     text.includes("soccer") ||
     text.includes("volleyball") ||
     text.includes("track") ||
+    text.includes("tennis") ||
+    text.includes("golf") ||
+    text.includes("wrestling") ||
+    text.includes("cheer") ||
     text.includes("athletic") ||
+    text.includes("athletics") ||
     text.includes("sports") ||
     text.includes("club") ||
+    text.includes("clubs") ||
     text.includes("band") ||
     text.includes("chorus") ||
-    text.includes("extracurricular")
+    text.includes("drama") ||
+    text.includes("theater") ||
+    text.includes("extracurricular") ||
+    text.includes("activity") ||
+    text.includes("activities")
   ) {
     return "athletics_extracurricular";
   }
 
-  return "unknown";
+  if (
+    text.includes("enroll") ||
+    text.includes("enrollment") ||
+    text.includes("registration") ||
+    text.includes("register") ||
+    text.includes("new student") ||
+    text.includes("transfer") ||
+    text.includes("withdraw") ||
+    text.includes("withdrawal")
+  ) {
+    return "enrollment_registration";
+  }
+
+  if (
+    text.includes("bus") ||
+    text.includes("transportation") ||
+    text.includes("pickup") ||
+    text.includes("drop off") ||
+    text.includes("drop-off") ||
+    text.includes("car rider") ||
+    text.includes("car line")
+  ) {
+    return "transportation";
+  }
+
+  if (
+    text.includes("stupid") ||
+    text.includes("idiot") ||
+    text.includes("dumb") ||
+    text.includes("hate this") ||
+    text.includes("this sucks") ||
+    text.includes("you suck") ||
+    text.includes("useless")
+  ) {
+    return "frustrated_or_abusive_user";
+  }
+
+  return "general_school_question";
 }
 
 function determineAnswerStatus(finalResponse, errorMessage, emergencyData) {
@@ -302,12 +384,19 @@ function determineAnswerStatus(finalResponse, errorMessage, emergencyData) {
 
   if (
     responseText.includes("couldn't find") ||
+    responseText.includes("couldn’t find") ||
     responseText.includes("could not find") ||
     responseText.includes("i couldn't find") ||
+    responseText.includes("i couldn’t find") ||
     responseText.includes("i could not find") ||
     responseText.includes("don't have that information") ||
+    responseText.includes("don’t have that information") ||
     responseText.includes("do not have that information") ||
-    responseText.includes("no information")
+    responseText.includes("no information") ||
+    responseText.includes("i don't see") ||
+    responseText.includes("i don’t see") ||
+    responseText.includes("not listed") ||
+    responseText.includes("not available")
   ) {
     return "no_answer_found";
   }
